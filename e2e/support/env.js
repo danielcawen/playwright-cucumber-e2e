@@ -1,4 +1,7 @@
-import 'dotenv/config'
+import dotenv from 'dotenv'
+
+const env = process.env.TEST_ENV ?? 'local'
+dotenv.config({ path: `config/.env.${env}` })
 
 export const BASE_URL = process.env.BASE_URL ?? 'http://localhost:3001'
 export const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:5173'
