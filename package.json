@@ -1,0 +1,12 @@
+{
+  "name": "e2d-practice-app-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@cucumber/cucumber": "^12.8.2",
+    "@playwright/test": "^1.59.1",
+    "dotenv": "^17.4.2",
+    "prettier": "^3.8.3"
+  }
+}
