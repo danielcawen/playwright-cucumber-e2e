@@ -1,0 +1,84 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-api:
+    name: API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch secrets (CI config)
+        uses: dopplerhq/secrets-fetch-action@v1.1.3
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
+          inject-env-vars: true
+
+      - name: Run API tests
+        run: npx cucumber-js --profile api
+
+  test-db:
+    name: DB Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch secrets (CI config)
+        uses: dopplerhq/secrets-fetch-action@v1.1.3
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
+          inject-env-vars: true
+
+      - name: Run DB tests
+        run: npx cucumber-js --profile db
+
+  test-ui:
+    name: UI Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Fetch secrets (CI config)
+        uses: dopplerhq/secrets-fetch-action@v1.1.3
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
+          inject-env-vars: true
+
+      - name: Run UI tests
+        run: npx cucumber-js --profile ui
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-reports
+          path: reports/

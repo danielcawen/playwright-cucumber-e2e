@@ -2,39 +2,61 @@
 a brief example for: ui, api, db, ai and email
 
 Run commands:
-  npx cucumber-js --profile ui    # UI only
-  npx cucumber-js --profile api   # API only
-  npx cucumber-js --profile db    # DB only
-  npx cucumber-js                 # All layers
+  npm test              # All layers
+  npm run test:ui       # UI only
+  npm run test:api      # API only
+  npm run test:db       # DB only
+  npm run seed          # Seed the database
+
+  Secrets are injected at runtime via Doppler — no .env files needed locally.
+  Install the CLI and run `doppler setup` once before using the commands above:
+
+    brew install dopplerhq/cli/doppler
+    doppler login
+    doppler setup   # select project: playwright-e2e, config: dev
 
 Environments:
-  Tests default to local. Set TEST_ENV to target a different environment:
+  Each environment maps to a Doppler config:
 
-  TEST_ENV=local   npx cucumber-js --profile ui   # uses .env.local (default)
-  TEST_ENV=staging npx cucumber-js --profile ui   # uses .env.staging
-  TEST_ENV=prod    npx cucumber-js --profile ui   # uses .env.prod
+    dev   → local development (default)
+    ci    → used by GitHub Actions
+    prd   → production
 
-  Env files live in config/. Copy config/.env.example to config/.env.<environment> and fill in real credentials before running against staging or prod.
+  To run against a specific config:
+    doppler run --config prd -- npx cucumber-js --profile ui
 
 Folder structure:
-  e2e/
-  ├── features/
-  │   ├── ui/auth/login.feature          @ui tag
-  │   ├── api/auth/login.feature         @api tag
-  │   └── db/users/user-data.feature     @db tag
-  ├── pages/
-  │   └── loginPage.js                   Page Object (locators + actions)
-  ├── api/
-  │   └── authClient.js                  Playwright request context wrappers
-  ├── db/
-  │   ├── client.js                      Shared pg.Pool factory
-  │   └── usersDb.js                     SQL query helpers
-  ├── steps/
-  │   ├── ui/loginSteps.js
-  │   ├── api/authSteps.js
-  │   ├── db/userSteps.js
-  │   └── shared/commonSteps.js
-  └── support/
-      ├── env.js                         BASE_URL, FRONTEND_URL, DB_URL, MAIL_URL
-      ├── world.js                       CustomWorld (browser/apiContext/db slots)
-      └── hooks.js                       Tag-based Before/After per layer
+```
+e2e/
+├── features/
+│   ├── api/
+│   │   └── auth/
+│   │       └── login.feature            @api tag
+│   ├── db/
+│   │   └── users/
+│   │       └── user-data.feature        @db tag
+│   └── ui/
+│       └── auth/
+│           └── login.feature            @ui tag
+├── pages/
+│   └── loginPage.js                     Locators + action helpers (UI only)
+├── api/
+│   └── authClient.js                    Playwright request context wrappers
+├── db/
+│   ├── client.js                        Shared pg.Pool factory
+│   ├── seed.js                          One-off seed script (npm run seed)
+│   └── usersDb.js                       SQL query helpers
+├── steps/
+│   ├── api/
+│   │   └── authSteps.js
+│   ├── db/
+│   │   └── userSteps.js
+│   ├── shared/
+│   │   └── commonSteps.js
+│   └── ui/
+│       └── loginSteps.js
+└── support/
+    ├── env.js                           BASE_URL, FRONTEND_URL, DB_URL, MAIL_URL
+    ├── hooks.js                         Tag-based Before/After per layer
+    └── world.js                         CustomWorld (browser/apiContext/db slots)
+```

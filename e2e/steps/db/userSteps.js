@@ -2,10 +2,16 @@ import { Given, When, Then } from '@cucumber/cucumber'
 import { usersDb } from '../../db/usersDb.js'
 
 Given('a user has registered with email {string}', async function (email) {
+  const db = usersDb(this.db)
+  await db.deleteByEmail(email)
+  await db.create(email)
   this.testEmail = email
 })
 
 Given('a user exists with email {string}', async function (email) {
+  const db = usersDb(this.db)
+  await db.deleteByEmail(email)
+  await db.create(email)
   this.testEmail = email
 })
 
@@ -26,7 +32,7 @@ Then('the user record should exist', async function () {
 
 Then('the password should be hashed', async function () {
   const user = this.queryResult[0]
-  if (!user.password.startsWith('$2')) throw new Error('Password is not bcrypt-hashed')
+  if (!user.password_hash.startsWith('$2')) throw new Error('Password is not bcrypt-hashed')
 })
 
 Then('the user record should not exist in the database', async function () {

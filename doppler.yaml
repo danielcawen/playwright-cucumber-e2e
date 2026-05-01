@@ -1,0 +1,3 @@
+setup:
+  project: playwright-e2e
+  config: dev

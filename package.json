@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "seed": "node e2e/db/seed.js"
+    "seed": "doppler run -- node e2e/db/seed.js",
+    "test": "doppler run -- npx cucumber-js",
+    "test:ui": "doppler run -- npx cucumber-js --profile ui",
+    "test:api": "doppler run -- npx cucumber-js --profile api",
+    "test:db": "doppler run -- npx cucumber-js --profile db"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^12.8.2",
