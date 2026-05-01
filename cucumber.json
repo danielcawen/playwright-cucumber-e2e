@@ -26,5 +26,12 @@
     "parallel": 0,
     "format": ["progress", "html:reports/db-report.html"],
     "formatOptions": { "snippetInterface": "async-await" }
+  },
+  "judge": {
+    "require": ["e2e/steps/api/**/*.js", "e2e/steps/judge/**/*.js", "e2e/support/**/*.js"],
+    "paths": ["e2e/features/judge/**/*.feature"],
+    "parallel": 0,
+    "format": ["progress", "html:reports/judge-report.html"],
+    "formatOptions": { "snippetInterface": "async-await" }
   }
 }
