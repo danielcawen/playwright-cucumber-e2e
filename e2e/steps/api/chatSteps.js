@@ -19,6 +19,7 @@ Given('I have an active conversation', async function () {
 Given('I have sent the message {string}', async function (content) {
   const response = await chatClient(this.apiContext, this.token).sendMessage(this.conversationId, content)
   const body = await response.json()
+  if (response.status() !== 200) throw new Error(`Send message failed (${response.status()}): ${JSON.stringify(body)}`)
   this.lastMessageId = body.data.aiResponse.id
 })
 
