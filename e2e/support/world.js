@@ -19,6 +19,10 @@ class CustomWorld {
     // shared transient state
     this.testEmail = null
     this.queryResult = null
+    this.token = null
+    this.conversationId = null
+    this.lastMessageId = null
+    this.judgeScores = null
   }
 }
 

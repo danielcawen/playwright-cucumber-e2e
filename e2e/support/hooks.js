@@ -30,3 +30,11 @@ Before({ tags: '@db' }, async function () {
 After({ tags: '@db' }, async function () {
   await this.db?.end()
 })
+
+Before({ tags: '@judge' }, async function () {
+  this.apiContext = await request.newContext({ baseURL: BASE_URL })
+})
+
+After({ tags: '@judge' }, async function () {
+  await this.apiContext?.dispose()
+})
