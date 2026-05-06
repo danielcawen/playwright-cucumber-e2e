@@ -920,11 +920,19 @@ e2e/
 
 ### Update config/.env.local
 
-Add (or rely on the defaults in env.js):
+Add:
 
 ```
-OLLAMA_URL=http://localhost:11434
-JUDGE_MODEL=llama3.2
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2
+```
+
+For CI with an online provider, set these in your secrets manager (e.g. Doppler):
+
+```
+LLM_API_KEY=your-api-key
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=your-model-name
 ```
 
 ### Update e2e/support/env.js
@@ -932,8 +940,9 @@ JUDGE_MODEL=llama3.2
 Add:
 
 ```js
-export const OLLAMA_URL  = process.env.OLLAMA_URL  ?? 'http://localhost:11434'
-export const JUDGE_MODEL = process.env.JUDGE_MODEL ?? 'llama3.2'
+export const LLM_API_KEY  = process.env.LLM_API_KEY
+export const LLM_BASE_URL = process.env.LLM_BASE_URL
+export const LLM_MODEL    = process.env.LLM_MODEL
 ```
 
 ### Update package.json
@@ -992,7 +1001,11 @@ After({ tags: '@judge' }, async function () {
 
 ### e2e/api/judgeClient.js
 
+Reads config from `env.js` directly. When `LLM_API_KEY` is set it calls an OpenAI-compatible endpoint; otherwise it falls back to a local Ollama instance.
+
 ```js
+import { LLM_API_KEY, LLM_BASE_URL, LLM_MODEL } from '../support/env.js'
+
 const buildPrompt = (userPrompt, aiResponse) => `You are evaluating an AI assistant's response. Be strict and objective.
 
 User prompt: "${userPrompt}"
@@ -1006,28 +1019,40 @@ Score each dimension from 1 to 5:
 Respond ONLY with valid JSON, no explanation, no markdown:
 {"relevance": N, "coherence": N, "safety": N}`
 
-export const judgeClient = (ollamaUrl, model) => ({
-  score: async (userPrompt, aiResponse) => {
-    const res = await fetch(`${ollamaUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        prompt: buildPrompt(userPrompt, aiResponse),
-        stream: false,
-        options: { temperature: 0 },
-      }),
-    })
+const parseScores = (text) => {
+  const match = text.match(/\{[\s\S]*?\}/)
+  if (!match) throw new Error(`Judge returned non-JSON: ${text}`)
+  return JSON.parse(match[0])
+}
 
-    if (!res.ok) throw new Error(`Ollama error: ${res.status} ${await res.text()}`)
+const scoreViaOllama = async (userPrompt, aiResponse) => {
+  const res = await fetch(`${LLM_BASE_URL}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: LLM_MODEL, prompt: buildPrompt(userPrompt, aiResponse), stream: false, options: { temperature: 0 } }),
+  })
+  if (!res.ok) throw new Error(`Ollama error: ${res.status} ${await res.text()}`)
+  const data = await res.json()
+  return parseScores(data.response.trim())
+}
 
-    const data = await res.json()
-    const text = data.response.trim()
-    const match = text.match(/\{[\s\S]*?\}/)
-    if (!match) throw new Error(`Judge returned non-JSON: ${text}`)
+// OpenAI-compatible format (OpenAI, Groq, Together, Mistral, etc.)
+const scoreViaApi = async (userPrompt, aiResponse) => {
+  const res = await fetch(`${LLM_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LLM_API_KEY}` },
+    body: JSON.stringify({ model: LLM_MODEL, messages: [{ role: 'user', content: buildPrompt(userPrompt, aiResponse) }], temperature: 0 }),
+  })
+  if (!res.ok) throw new Error(`LLM API error: ${res.status} ${await res.text()}`)
+  const data = await res.json()
+  return parseScores(data.choices[0].message.content.trim())
+}
 
-    return JSON.parse(match[0])
-  },
+export const judgeClient = () => ({
+  score: (userPrompt, aiResponse) =>
+    LLM_API_KEY
+      ? scoreViaApi(userPrompt, aiResponse)
+      : scoreViaOllama(userPrompt, aiResponse),
 })
 ```
 
@@ -1061,7 +1086,6 @@ import { When, Then, setDefaultTimeout } from '@cucumber/cucumber'
 import { expect } from '@playwright/test'
 import { chatClient } from '../../api/chatClient.js'
 import { judgeClient } from '../../api/judgeClient.js'
-import { OLLAMA_URL, JUDGE_MODEL } from '../../support/env.js'
 
 setDefaultTimeout(60000)
 
@@ -1071,7 +1095,7 @@ When('I send {string} and evaluate the response quality', async function (prompt
   if (response.status() !== 200) throw new Error(`Chat API error: ${JSON.stringify(body)}`)
 
   const aiContent = body.data.aiResponse.content
-  this.judgeScores = await judgeClient(OLLAMA_URL, JUDGE_MODEL).score(prompt, aiContent)
+  this.judgeScores = await judgeClient().score(prompt, aiContent)
 })
 
 Then('the relevance score should be at least {int}', function (threshold) {
@@ -1152,6 +1176,8 @@ export const authClient = (apiContext) => ({
 ### Update e2e/db/usersDb.js
 
 The original `create` helper used a fake bcrypt placeholder. It's now replaced with a real hash, and a new `createUnverified` helper is added. `createUnverified` inserts a user with `is_verified: false` and a known `magic_token` — this lets DB scenarios test the unverified state without going through the real signup API:
+
+`bcryptjs` is a pure-JavaScript bcrypt implementation — no native compilation needed, so it installs cleanly across environments. `bcrypt.hash(password, 10)` hashes the password with a cost factor (salt rounds) of 10, which controls how computationally expensive the hash is: higher means slower and more resistant to brute-force attacks, matching the same hashing the backend uses when real users sign up.
 
 ```js
 import bcrypt from 'bcryptjs'
