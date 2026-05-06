@@ -2,6 +2,22 @@ import { When, Then } from '@cucumber/cucumber'
 import { expect } from '@playwright/test'
 import { authClient } from '../../api/authClient.js'
 
+When('I sign up with a unique email, first name {string}, last name {string}, and password {string}', async function (firstName, lastName, password) {
+  const email = `testuser+${Date.now()}@example.com`
+  this.response = await authClient(this.apiContext).signup(email, password, firstName, lastName)
+})
+
+When('I sign up with email {string}, first name {string}, last name {string}, and password {string}', async function (email, firstName, lastName, password) {
+  this.response = await authClient(this.apiContext).signup(email, password, firstName, lastName)
+})
+
+Then('the response body should confirm account creation', async function () {
+  const body = await this.response.json()
+  expect(body.success).toBe(true)
+  expect(typeof body.message).toBe('string')
+  expect(body.message.length).toBeGreaterThan(0)
+})
+
 When('I log in via API with email {string} and password {string}', async function (email, password) {
   this.lastEmail = email
   this.response = await authClient(this.apiContext).login(email, password)

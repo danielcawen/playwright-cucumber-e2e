@@ -1270,6 +1270,339 @@ npx cucumber-js --profile judge
 
 ---
 
+## Layer 6: Signup with email verification
+
+This layer adds signup tests across all three existing layers (UI, API, DB). The new element is **email verification**: after signup, the app sends a verification email. UI tests read that email from MailHog (a local mail catcher) and follow the link.
+
+### What MailHog is
+
+MailHog is a local SMTP server that captures outgoing email instead of delivering it. It exposes an HTTP API at `http://localhost:8025` so tests can read captured messages programmatically. No emails actually leave the machine.
+
+### Folder additions
+
+```
+e2e/
+├── features/
+│   ├── api/auth/signup.feature     ← new
+│   ├── db/auth/signup.feature      ← new
+│   └── ui/auth/signup.feature      ← new
+├── pages/
+│   └── signupPage.js               ← new
+└── steps/
+    ├── api/authSteps.js            ← extended (signup steps added)
+    ├── db/signupSteps.js           ← new
+    └── ui/signupSteps.js           ← new
+```
+
+### Update config/.env.local
+
+`MAIL_URL` was already in `env.js` defaults — add it explicitly if overriding:
+
+```
+MAIL_URL=http://localhost:8025
+```
+
+### Update e2e/support/world.js
+
+Add to the `CustomWorld` constructor:
+
+```js
+this.signupEmail      = null
+this.verificationLink = null
+```
+
+### Update e2e/api/authClient.js
+
+Add the `signup` method:
+
+```js
+export const authClient = (apiContext) => ({
+  login: (email, password) =>
+    apiContext.post('/api/auth/login', { data: { email, password } }),
+
+  signup: (email, password, firstName, lastName) =>
+    apiContext.post('/api/auth/signup', { data: { email, password, firstName, lastName } }),
+})
+```
+
+### Update e2e/db/usersDb.js
+
+The original `create` helper used a fake bcrypt placeholder. It's now replaced with a real hash, and a new `createUnverified` helper is added. `createUnverified` inserts a user with `is_verified: false` and a known `magic_token` — this lets DB scenarios test the unverified state without going through the real signup API:
+
+```js
+import bcrypt from 'bcryptjs'
+
+export const usersDb = (pool) => ({
+  create: async (email, password = 'Password123!') => {
+    const hash = await bcrypt.hash(password, 10)
+    return pool.query(
+      `INSERT INTO users (email, password_hash, first_name, last_name, is_verified)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [email, hash, 'Test', 'User', true]
+    )
+  },
+
+  createUnverified: async (email, password = 'Password123!') => {
+    const hash = await bcrypt.hash(password, 10)
+    const expires = new Date(Date.now() + 86400000)
+    return pool.query(
+      `INSERT INTO users (email, password_hash, first_name, last_name, is_verified, magic_token, magic_token_expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [email, hash, 'Test', 'User', false, 'test-verification-token', expires]
+    )
+  },
+
+  findByEmail: (email) =>
+    pool.query('SELECT * FROM users WHERE email = $1', [email]),
+
+  deleteByEmail: (email) =>
+    pool.query('DELETE FROM users WHERE email = $1', [email]),
+})
+```
+
+### How email verification works
+
+The app stores a `magic_token` and `magic_token_expires_at` in the `users` row when a new account is created. It emails a link to `{FRONTEND_URL}/auth/verify?token=<magic_token>`. Following that link sets `is_verified = true` and clears the token.
+
+For tests, MailHog captures the email. The UI step polls MailHog's API, finds the message addressed to `this.signupEmail`, decodes the body, and extracts the verification URL.
+
+**Quoted-printable decoding**: email bodies are often encoded in quoted-printable format — long lines are split with `=\r\n` and non-ASCII bytes are written as `=XX` hex. The step reverses this before searching for the URL.
+
+### e2e/features/api/auth/signup.feature
+
+```gherkin
+@api
+Feature: Signup via API
+
+  Scenario: Successful signup creates an account
+    When I sign up with a unique email, first name "Test", last name "User", and password "Password123!"
+    Then the response status should be 201
+    And the response body should confirm account creation
+
+  Scenario: Duplicate email returns 400
+    When I sign up with email "testuser@example.com", first name "Test", last name "User", and password "Password123!"
+    Then the response status should be 400
+
+  Scenario Outline: Missing required fields return 400
+    When I sign up with email "<email>", first name "<firstName>", last name "<lastName>", and password "<password>"
+    Then the response status should be 400
+
+    Examples:
+      | email           | firstName | lastName | password     |
+      |                 | Test      | User     | Password123! |
+      | new@example.com |           | User     | Password123! |
+      | new@example.com | Test      |          | Password123! |
+      | new@example.com | Test      | User     |              |
+```
+
+### e2e/features/db/auth/signup.feature
+
+```gherkin
+@db
+Feature: Signup user data in database
+
+  Scenario: Newly signed up user is stored as unverified with a verification token
+    Given a user was created via signup with email "db-signup-test@example.com"
+    Then the user record should exist
+    And the user should not be verified
+    And the password should be hashed
+    And a verification token should be set for the user
+
+  Scenario: Verified user has is_verified true and no token
+    Given a user was verified with email "db-verified-test@example.com"
+    Then the user record should exist
+    And the user should be verified
+    And the verification token should be cleared
+```
+
+### e2e/features/ui/auth/signup.feature
+
+```gherkin
+@ui
+Feature: Signup via UI
+
+  Scenario: Successful signup shows a confirmation message
+    Given I am on the login page
+    When I sign up via UI with a unique email, first name "Test", last name "User", and password "Password123!"
+    Then I should see a signup confirmation message
+
+  Scenario: Verification email contains a working link
+    Given I am on the login page
+    When I sign up via UI with a unique email, first name "Test", last name "User", and password "Password123!"
+    Then I should see a signup confirmation message
+    And I receive a verification email
+    When I click the verification link from the email
+    Then I should be redirected to the chat page
+
+  Scenario: Signup with mismatched passwords shows an error
+    Given I am on the login page
+    When I attempt signup with email "mismatch@example.com", first name "Test", last name "User", password "Password123!", and confirm password "Different1!"
+    Then I should see an error message
+```
+
+### e2e/pages/signupPage.js
+
+```js
+import { expect } from '@playwright/test'
+
+const signupTabLocator           = '[data-testid="tab-signup"]'
+const firstNameInputLocator      = '[data-testid="first-name-input"]'
+const lastNameInputLocator       = '[data-testid="last-name-input"]'
+const emailInputLocator          = '[data-testid="email-input"]'
+const passwordInputLocator       = '[data-testid="password-input"]'
+const confirmPasswordInputLocator = '[data-testid="confirm-password-input"]'
+const submitButtonLocator        = '[data-testid="submit-button"]'
+const infoMessageLocator         = '[data-testid="info-message"]'
+
+export async function signup(page, email, firstName, lastName, password, confirmPassword = password) {
+  const tab = page.locator(signupTabLocator)
+  await tab.waitFor()
+  await tab.click()
+
+  await page.locator(firstNameInputLocator).fill(firstName)
+  await page.locator(lastNameInputLocator).fill(lastName)
+  await page.locator(emailInputLocator).fill(email)
+  await page.locator(passwordInputLocator).fill(password)
+  await page.locator(confirmPasswordInputLocator).fill(confirmPassword)
+  await page.locator(submitButtonLocator).click()
+}
+
+export async function verifyConfirmationMessage(page) {
+  const info = page.locator(infoMessageLocator)
+  await info.waitFor()
+  await expect(info).toContainText('Check your email')
+}
+```
+
+### e2e/steps/ui/signupSteps.js
+
+The email verification step creates its own `request` context pointed at `MAIL_URL`, polls up to 10 times (1 s apart) for the message, decodes the body, and stores the extracted link on `this.verificationLink` for the next step.
+
+```js
+import { When, Then } from '@cucumber/cucumber'
+import { request } from '@playwright/test'
+import { signup, verifyConfirmationMessage } from '../../pages/signupPage.js'
+import { MAIL_URL } from '../../support/env.js'
+
+When('I sign up via UI with a unique email, first name {string}, last name {string}, and password {string}', async function (firstName, lastName, password) {
+  this.signupEmail = `testuser+${Date.now()}@example.com`
+  await signup(this.page, this.signupEmail, firstName, lastName, password)
+})
+
+When('I attempt signup with email {string}, first name {string}, last name {string}, password {string}, and confirm password {string}', async function (email, firstName, lastName, password, confirmPassword) {
+  await signup(this.page, email, firstName, lastName, password, confirmPassword)
+})
+
+Then('I should see a signup confirmation message', async function () {
+  await verifyConfirmationMessage(this.page)
+})
+
+Then('I receive a verification email', async function () {
+  const mailContext = await request.newContext({ baseURL: MAIL_URL })
+  let emailBody
+
+  for (let i = 0; i < 10; i++) {
+    const res = await mailContext.get('/api/v1/messages')
+    const messages = await res.json()
+    const match = (Array.isArray(messages) ? messages : []).find(m =>
+      m.To?.some(t => `${t.Mailbox}@${t.Domain}` === this.signupEmail)
+    )
+    if (match) { emailBody = match.Content?.Body; break }
+    await new Promise(r => setTimeout(r, 1000))
+  }
+
+  await mailContext.dispose()
+  if (!emailBody) throw new Error(`No verification email received for ${this.signupEmail}`)
+
+  // Decode quoted-printable encoding
+  const decoded = emailBody
+    .replace(/=\r\n/g, '')
+    .replace(/=\n/g, '')
+    .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+
+  const urlMatch = decoded.match(/https?:\/\/[^\s"'<>]+\/auth\/verify\?token=[^\s"'<>]+/)
+  if (!urlMatch) throw new Error('Verification link not found in email body')
+  this.verificationLink = urlMatch[0]
+})
+
+When('I click the verification link from the email', async function () {
+  await this.page.goto(this.verificationLink)
+})
+```
+
+### e2e/steps/api/authSteps.js (additions)
+
+```js
+When('I sign up with a unique email, first name {string}, last name {string}, and password {string}', async function (firstName, lastName, password) {
+  const email = `testuser+${Date.now()}@example.com`
+  this.response = await authClient(this.apiContext).signup(email, password, firstName, lastName)
+})
+
+When('I sign up with email {string}, first name {string}, last name {string}, and password {string}', async function (email, firstName, lastName, password) {
+  this.response = await authClient(this.apiContext).signup(email, password, firstName, lastName)
+})
+
+Then('the response body should confirm account creation', async function () {
+  const body = await this.response.json()
+  expect(body.success).toBe(true)
+  expect(typeof body.message).toBe('string')
+  expect(body.message.length).toBeGreaterThan(0)
+})
+```
+
+### e2e/steps/db/signupSteps.js
+
+```js
+import { Given, Then } from '@cucumber/cucumber'
+import { usersDb } from '../../db/usersDb.js'
+
+Given('a user was created via signup with email {string}', async function (email) {
+  const db = usersDb(this.db)
+  await db.deleteByEmail(email)
+  await db.createUnverified(email)
+  const result = await db.findByEmail(email)
+  this.queryResult = result.rows
+})
+
+Given('a user was verified with email {string}', async function (email) {
+  const db = usersDb(this.db)
+  await db.deleteByEmail(email)
+  await db.create(email)
+  const result = await db.findByEmail(email)
+  this.queryResult = result.rows
+})
+
+Then('the user should not be verified', async function () {
+  const user = this.queryResult[0]
+  if (user.is_verified) throw new Error('Expected user to not be verified, but is_verified is true')
+})
+
+Then('the user should be verified', async function () {
+  const user = this.queryResult[0]
+  if (!user.is_verified) throw new Error('Expected user to be verified, but is_verified is false')
+})
+
+Then('a verification token should be set for the user', async function () {
+  const user = this.queryResult[0]
+  if (!user.magic_token) throw new Error('Expected magic_token to be set but it is null')
+})
+
+Then('the verification token should be cleared', async function () {
+  const user = this.queryResult[0]
+  if (user.magic_token) throw new Error('Expected magic_token to be null but it is set')
+})
+```
+
+Run it:
+
+```bash
+npx cucumber-js --profile ui e2e/features/ui/auth/signup.feature
+npx cucumber-js --profile api e2e/features/api/auth/signup.feature
+npx cucumber-js --profile db e2e/features/db/auth/signup.feature
+```
+
+---
+
 ## How to add a new feature area
 
 This is the repeatable pattern for adding a new domain (e.g. "settings", "notifications") to the existing project.

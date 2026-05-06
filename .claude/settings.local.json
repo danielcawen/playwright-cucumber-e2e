@@ -4,7 +4,9 @@
       "mcp__playwright__browser_click",
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_snapshot",
-      "mcp__playwright__browser_evaluate"
+      "mcp__playwright__browser_evaluate",
+      "Read(//d/Documents/GitHub/app-for-e2e/**)",
+      "Read(//d/Documents/GitHub/app-for-e2e/backend/**)"
     ]
   },
   "enabledMcpjsonServers": [
