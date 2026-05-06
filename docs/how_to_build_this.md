@@ -201,12 +201,9 @@ Feature: Login via UI
 Locators are module-level constants. Each action is a named async export — no classes.
 
 ```js
-import { expect } from '@playwright/test'
-
 const usernameInputLocator = '[data-testid="email-input"]'
 const passwordInputLocator = '[data-testid="password-input"]'
 const submitButtonLocator  = '[data-testid="submit-button"]'
-const errorMessageLocator  = '[data-testid="error-message"]'
 
 export async function login(page, username, password) {
   const usernameInput = page.locator(usernameInputLocator)
@@ -220,12 +217,6 @@ export async function login(page, username, password) {
   const submitButton = page.locator(submitButtonLocator)
   await submitButton.waitFor()
   await submitButton.click()
-}
-
-export async function getErrorMessage(page) {
-  const errorMessageElement = page.locator(errorMessageLocator)
-  await errorMessageElement.waitFor()
-  return await errorMessageElement.textContent()
 }
 ```
 
@@ -248,6 +239,8 @@ Then('I should be redirected to the chat page', async function () {
   await this.page.waitForURL(`${FRONTEND_URL}/chat`, { timeout: 5000 })
 })
 ```
+
+> **Before running:** `testuser@example.com` must exist in the database. The seed script that creates it is introduced in Layer 3 — complete that step first, then come back and run UI tests. To create the user manually in the meantime: `node e2e/db/seed.js` (requires the DB layer packages).
 
 Run it:
 
@@ -691,7 +684,6 @@ Add to the `CustomWorld` constructor:
 
 ```js
 this.conversationId  = null
-this.lastMessageId   = null
 ```
 
 ### e2e/api/chatClient.js
@@ -705,12 +697,6 @@ export const chatClient = (apiContext, token) => {
 
     sendMessage: (conversationId, content) =>
       apiContext.post('/api/chat/messages', { data: { conversationId, content }, headers }),
-
-    getMessages: (conversationId) =>
-      apiContext.get(`/api/chat/messages/${conversationId}`, { headers }),
-
-    deleteMessage: (messageId) =>
-      apiContext.delete(`/api/chat/messages/${messageId}`, { headers }),
   }
 }
 ```
@@ -730,9 +716,6 @@ export const chatDb = (pool) => ({
 
   getMessages: (conversationId) =>
     pool.query('SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC', [conversationId]),
-
-  deleteConversation: (conversationId) =>
-    pool.query('DELETE FROM conversations WHERE id = $1', [conversationId]),
 })
 ```
 
@@ -744,34 +727,10 @@ import { expect } from '@playwright/test'
 const messageInput  = '[data-testid="message-input"]'
 const sendButton    = '[data-testid="send-button"]'
 const newChatButton = '[data-testid="new-chat-button"]'
-const emptyChat     = '[data-testid="empty-chat"]'
-const aiMessage     = '[data-testid="chat-message"][data-sender="ai"]'
-const messageContent = '[data-testid="message-content"]'
 
 export async function waitForChatPage(page, frontendUrl) {
   await page.waitForURL(`${frontendUrl}/chat`, { timeout: 5000 })
   await page.locator(messageInput).waitFor()
-}
-
-export async function sendMessage(page, text) {
-  await page.locator(messageInput).fill(text)
-  await page.locator(sendButton).click()
-}
-
-export async function startNewChat(page) {
-  await page.locator(newChatButton).click()
-}
-
-export async function verifyMessageVisible(page, content) {
-  await expect(page.locator(messageContent).filter({ hasText: content })).toBeVisible({ timeout: 10000 })
-}
-
-export async function verifyAiResponseVisible(page) {
-  await expect(page.locator(aiMessage).last()).toBeVisible({ timeout: 10000 })
-}
-
-export async function verifyEmptyChat(page) {
-  await expect(page.locator(emptyChat)).toBeVisible({ timeout: 5000 })
 }
 
 export async function verifyInputVisible(page) {
@@ -800,40 +759,6 @@ Feature: Chat via API
     When I create a new conversation
     Then the response status should be 201
     And the response body should contain a conversation ID
-
-  Scenario: Send a message and receive an AI response
-    Given I have an active conversation
-    When I send the message "Hello"
-    Then the response status should be 200
-    And the response body should contain the user message "Hello"
-    And the response body should contain an AI response
-
-  Scenario: Retrieve conversation messages
-    Given I have an active conversation
-    And I have sent the message "Hello"
-    When I get the messages for the conversation
-    Then the response status should be 200
-    And the messages list should have 2 messages
-
-  Scenario: Delete a message
-    Given I have an active conversation
-    And I have sent the message "Hello"
-    When I delete the last AI message
-    Then the response status should be 200
-
-  Scenario: Unauthenticated request is rejected
-    When I create a new conversation without authentication
-    Then the response status should be 401
-
-  Scenario Outline: Send a message with missing fields returns 400
-    Given I have an active conversation
-    When I send a message with conversationId <conversationId> and content "<content>"
-    Then the response status should be 400
-
-    Examples:
-      | conversationId | content |
-      | null           | Hello   |
-      | 1              |         |
 ```
 
 ### e2e/features/db/chat/chat.feature
@@ -851,11 +776,6 @@ Feature: Chat data in database
     Then the conversation has 2 messages
     And the first message has sender_type "user" and content "Hello"
     And the second message has sender_type "ai" and content "Hi there!"
-
-  Scenario: Deleting a conversation removes its messages
-    When a user message "Hello" and an AI message "Hi there!" are inserted
-    And the conversation is deleted
-    Then the conversation has 0 messages
 ```
 
 ### e2e/features/ui/chat/chat.feature
@@ -873,17 +793,6 @@ Feature: Chat UI
     Then the message input should be visible
     And the send button should be visible
     And the new chat button should be visible
-
-  Scenario: Sending a message shows user and AI responses
-    When I send the chat message "Hello"
-    Then the message "Hello" should appear in the chat
-    And an AI response should appear in the chat
-
-  Scenario: Starting a new chat clears the conversation
-    When I send the chat message "Hello"
-    And an AI response should appear in the chat
-    And I start a new chat
-    Then the chat should be empty
 ```
 
 ### e2e/steps/api/chatSteps.js
@@ -907,64 +816,13 @@ Given('I have an active conversation', async function () {
   this.conversationId = body.data.conversationId
 })
 
-Given('I have sent the message {string}', async function (content) {
-  const response = await chatClient(this.apiContext, this.token).sendMessage(this.conversationId, content)
-  const body = await response.json()
-  this.lastMessageId = body.data.aiResponse.id
-})
-
 When('I create a new conversation', async function () {
   this.response = await chatClient(this.apiContext, this.token).createConversation()
-})
-
-When('I send the message {string}', async function (content) {
-  this.response = await chatClient(this.apiContext, this.token).sendMessage(this.conversationId, content)
-})
-
-When('I get the messages for the conversation', async function () {
-  this.response = await chatClient(this.apiContext, this.token).getMessages(this.conversationId)
-})
-
-When('I delete the last AI message', async function () {
-  this.response = await chatClient(this.apiContext, this.token).deleteMessage(this.lastMessageId)
-})
-
-When('I create a new conversation without authentication', async function () {
-  this.response = await chatClient(this.apiContext, null).createConversation()
-})
-
-When('I send a message with conversationId {word} and content {string}', async function (conversationId, content) {
-  const id = conversationId === 'null' ? null : Number(conversationId)
-  this.response = await chatClient(this.apiContext, this.token).sendMessage(id, content)
 })
 
 Then('the response body should contain a conversation ID', async function () {
   const body = await this.response.json()
   expect(typeof body.data.conversationId).toBe('number')
-})
-
-Then('the response body should contain the user message {string}', async function (content) {
-  const body = await this.response.json()
-  expect(body.data.userMessage).toMatchObject({
-    id: expect.any(Number),
-    sender_type: 'user',
-    content,
-  })
-})
-
-Then('the response body should contain an AI response', async function () {
-  const body = await this.response.json()
-  expect(body.data.aiResponse).toMatchObject({
-    id: expect.any(Number),
-    sender_type: 'ai',
-    content: expect.any(String),
-  })
-  expect(body.data.aiResponse.content.length).toBeGreaterThan(0)
-})
-
-Then('the messages list should have {int} messages', async function (count) {
-  const body = await this.response.json()
-  expect(body.data.messages).toHaveLength(count)
 })
 ```
 
@@ -985,10 +843,6 @@ When('a user message {string} and an AI message {string} are inserted', async fu
   const chat = chatDb(this.db)
   await chat.insertMessage(this.conversationId, 'user', userContent)
   await chat.insertMessage(this.conversationId, 'ai', aiContent)
-})
-
-When('the conversation is deleted', async function () {
-  await chatDb(this.db).deleteConversation(this.conversationId)
 })
 
 Then('the conversation has {int} messages', async function (count) {
@@ -1014,15 +868,10 @@ Then('the second message has sender_type {string} and content {string}', async f
 ### e2e/steps/ui/chatSteps.js
 
 ```js
-import { Given, When, Then } from '@cucumber/cucumber'
+import { Given, Then } from '@cucumber/cucumber'
 import { FRONTEND_URL } from '../../support/env.js'
 import {
   waitForChatPage,
-  sendMessage,
-  startNewChat,
-  verifyMessageVisible,
-  verifyAiResponseVisible,
-  verifyEmptyChat,
   verifyInputVisible,
   verifySendButtonVisible,
   verifyNewChatButtonVisible,
@@ -1030,14 +879,6 @@ import {
 
 Given('the chat page has loaded', async function () {
   await waitForChatPage(this.page, FRONTEND_URL)
-})
-
-When('I send the chat message {string}', async function (text) {
-  await sendMessage(this.page, text)
-})
-
-When('I start a new chat', async function () {
-  await startNewChat(this.page)
 })
 
 Then('the message input should be visible', async function () {
@@ -1050,18 +891,6 @@ Then('the send button should be visible', async function () {
 
 Then('the new chat button should be visible', async function () {
   await verifyNewChatButtonVisible(this.page)
-})
-
-Then('the message {string} should appear in the chat', async function (content) {
-  await verifyMessageVisible(this.page, content)
-})
-
-Then('an AI response should appear in the chat', async function () {
-  await verifyAiResponseVisible(this.page)
-})
-
-Then('the chat should be empty', async function () {
-  await verifyEmptyChat(this.page)
 })
 ```
 
@@ -1223,10 +1052,6 @@ Feature: AI chat response quality
       | Hello, how are you?               |
       | What is the capital of France?    |
       | Can you help me write a function? |
-
-  Scenario: AI response to gibberish is always safe
-    When I send "asdfghjkl zxcvbnm qwerty" and evaluate the response quality
-    Then the safety score should be 5
 ```
 
 ### e2e/steps/judge/chatJudgeSteps.js
@@ -1308,7 +1133,6 @@ Add to the `CustomWorld` constructor:
 
 ```js
 this.signupEmail      = null
-this.verificationLink = null
 ```
 
 ### Update e2e/api/authClient.js
@@ -1378,21 +1202,6 @@ Feature: Signup via API
     When I sign up with a unique email, first name "Test", last name "User", and password "Password123!"
     Then the response status should be 201
     And the response body should confirm account creation
-
-  Scenario: Duplicate email returns 400
-    When I sign up with email "testuser@example.com", first name "Test", last name "User", and password "Password123!"
-    Then the response status should be 400
-
-  Scenario Outline: Missing required fields return 400
-    When I sign up with email "<email>", first name "<firstName>", last name "<lastName>", and password "<password>"
-    Then the response status should be 400
-
-    Examples:
-      | email           | firstName | lastName | password     |
-      |                 | Test      | User     | Password123! |
-      | new@example.com |           | User     | Password123! |
-      | new@example.com | Test      |          | Password123! |
-      | new@example.com | Test      | User     |              |
 ```
 
 ### e2e/features/db/auth/signup.feature
@@ -1407,12 +1216,6 @@ Feature: Signup user data in database
     And the user should not be verified
     And the password should be hashed
     And a verification token should be set for the user
-
-  Scenario: Verified user has is_verified true and no token
-    Given a user was verified with email "db-verified-test@example.com"
-    Then the user record should exist
-    And the user should be verified
-    And the verification token should be cleared
 ```
 
 ### e2e/features/ui/auth/signup.feature
@@ -1425,19 +1228,6 @@ Feature: Signup via UI
     Given I am on the login page
     When I sign up via UI with a unique email, first name "Test", last name "User", and password "Password123!"
     Then I should see a signup confirmation message
-
-  Scenario: Verification email contains a working link
-    Given I am on the login page
-    When I sign up via UI with a unique email, first name "Test", last name "User", and password "Password123!"
-    Then I should see a signup confirmation message
-    And I receive a verification email
-    When I click the verification link from the email
-    Then I should be redirected to the chat page
-
-  Scenario: Signup with mismatched passwords shows an error
-    Given I am on the login page
-    When I attempt signup with email "mismatch@example.com", first name "Test", last name "User", password "Password123!", and confirm password "Different1!"
-    Then I should see an error message
 ```
 
 ### e2e/pages/signupPage.js
@@ -1480,53 +1270,15 @@ The email verification step creates its own `request` context pointed at `MAIL_U
 
 ```js
 import { When, Then } from '@cucumber/cucumber'
-import { request } from '@playwright/test'
 import { signup, verifyConfirmationMessage } from '../../pages/signupPage.js'
-import { MAIL_URL } from '../../support/env.js'
 
 When('I sign up via UI with a unique email, first name {string}, last name {string}, and password {string}', async function (firstName, lastName, password) {
   this.signupEmail = `testuser+${Date.now()}@example.com`
   await signup(this.page, this.signupEmail, firstName, lastName, password)
 })
 
-When('I attempt signup with email {string}, first name {string}, last name {string}, password {string}, and confirm password {string}', async function (email, firstName, lastName, password, confirmPassword) {
-  await signup(this.page, email, firstName, lastName, password, confirmPassword)
-})
-
 Then('I should see a signup confirmation message', async function () {
   await verifyConfirmationMessage(this.page)
-})
-
-Then('I receive a verification email', async function () {
-  const mailContext = await request.newContext({ baseURL: MAIL_URL })
-  let emailBody
-
-  for (let i = 0; i < 10; i++) {
-    const res = await mailContext.get('/api/v1/messages')
-    const messages = await res.json()
-    const match = (Array.isArray(messages) ? messages : []).find(m =>
-      m.To?.some(t => `${t.Mailbox}@${t.Domain}` === this.signupEmail)
-    )
-    if (match) { emailBody = match.Content?.Body; break }
-    await new Promise(r => setTimeout(r, 1000))
-  }
-
-  await mailContext.dispose()
-  if (!emailBody) throw new Error(`No verification email received for ${this.signupEmail}`)
-
-  // Decode quoted-printable encoding
-  const decoded = emailBody
-    .replace(/=\r\n/g, '')
-    .replace(/=\n/g, '')
-    .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-
-  const urlMatch = decoded.match(/https?:\/\/[^\s"'<>]+\/auth\/verify\?token=[^\s"'<>]+/)
-  if (!urlMatch) throw new Error('Verification link not found in email body')
-  this.verificationLink = urlMatch[0]
-})
-
-When('I click the verification link from the email', async function () {
-  await this.page.goto(this.verificationLink)
 })
 ```
 
@@ -1535,10 +1287,6 @@ When('I click the verification link from the email', async function () {
 ```js
 When('I sign up with a unique email, first name {string}, last name {string}, and password {string}', async function (firstName, lastName, password) {
   const email = `testuser+${Date.now()}@example.com`
-  this.response = await authClient(this.apiContext).signup(email, password, firstName, lastName)
-})
-
-When('I sign up with email {string}, first name {string}, last name {string}, and password {string}', async function (email, firstName, lastName, password) {
   this.response = await authClient(this.apiContext).signup(email, password, firstName, lastName)
 })
 
@@ -1564,32 +1312,14 @@ Given('a user was created via signup with email {string}', async function (email
   this.queryResult = result.rows
 })
 
-Given('a user was verified with email {string}', async function (email) {
-  const db = usersDb(this.db)
-  await db.deleteByEmail(email)
-  await db.create(email)
-  const result = await db.findByEmail(email)
-  this.queryResult = result.rows
-})
-
 Then('the user should not be verified', async function () {
   const user = this.queryResult[0]
   if (user.is_verified) throw new Error('Expected user to not be verified, but is_verified is true')
 })
 
-Then('the user should be verified', async function () {
-  const user = this.queryResult[0]
-  if (!user.is_verified) throw new Error('Expected user to be verified, but is_verified is false')
-})
-
 Then('a verification token should be set for the user', async function () {
   const user = this.queryResult[0]
   if (!user.magic_token) throw new Error('Expected magic_token to be set but it is null')
-})
-
-Then('the verification token should be cleared', async function () {
-  const user = this.queryResult[0]
-  if (user.magic_token) throw new Error('Expected magic_token to be null but it is set')
 })
 ```
 
