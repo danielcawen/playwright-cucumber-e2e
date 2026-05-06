@@ -3,7 +3,7 @@ Feature: Login via UI
 
   Scenario: Successful login with valid credentials
     Given I am on the login page
-    When I log in with email "testuser@example.com" and password "Password123!"
+    When I log in with email "ui-testuser@example.com" and password "Password123!"
     Then I should be redirected to the chat page
 
   Scenario Outline: Login with invalid credentials shows an error
@@ -12,6 +12,6 @@ Feature: Login via UI
     Then I should see an error message
 
     Examples:
-      | email                 | password      |
-      | testuser@example.com  | wrongpassword |
-      | nobody@example.com    | password123   |
+      | email                    | password      |
+      | ui-testuser@example.com  | wrongpassword |
+      | nobody@example.com       | password123   |

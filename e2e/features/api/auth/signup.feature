@@ -7,7 +7,7 @@ Feature: Signup via API
     And the response body should confirm account creation
 
   Scenario: Duplicate email returns 400
-    When I sign up with email "testuser@example.com", first name "Test", last name "User", and password "Password123!"
+    When I sign up with email "api-signup-existing@example.com", first name "Test", last name "User", and password "Password123!"
     Then the response status should be 400
 
   Scenario Outline: Missing required fields return 400
