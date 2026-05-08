@@ -4,3 +4,5 @@ config/.env.*
 !config/.env.example
 reports/*
 .DS_store
+.claude/settings.local.json
+.playwright-mcp/
