@@ -1,5 +1,44 @@
 # real e2e automation: how to start
 
+## Index
+
+- [Required knowledge and documentation](#required-knowledge-and-documentation)
+- [Install](#install)
+- [Folder structure](#folder-structure)
+- [package.json](#packagejson)
+- [cucumber.json](#cucumberjson)
+- [.gitignore](#gitignore)
+- [config/.env.local](#configenvlocal)
+- [e2e/support/env.js](#e2esupportenvjs)
+- [e2e/support/world.js](#e2esupportworldjs)
+- [e2e/support/hooks.js](#e2esupporthooksjs)
+- [Layer 1: UI](#layer-1-ui)
+- [Layer 2: API](#layer-2-api)
+- [Layer 3: DB](#layer-3-db)
+- [Secrets with Doppler (optional)](#secrets-with-doppler-optional)
+- [Layer 4: Chat](#layer-4-chat)
+- [Layer 5: Judge (AI quality scoring)](#layer-5-judge-ai-quality-scoring)
+- [Layer 6: Signup with email verification](#layer-6-signup-with-email-verification)
+- [How to add a new feature area](#how-to-add-a-new-feature-area)
+- [Running tests](#running-tests)
+
+---
+
+## Required knowledge and documentation
+
+| Topic | Resource |
+|-------|----------|
+| **Cucumber JS** | [Cucumber JS docs](https://github.com/cucumber/cucumber-js/blob/main/docs/support_files/api_reference.md) — step definitions, hooks, world, and profiles |
+| **Playwright** | [Playwright docs](https://playwright.dev/docs/intro) — browser automation, locators, assertions, and the request API |
+| **REST API** | [MDN HTTP docs](https://developer.mozilla.org/en-US/docs/Web/HTTP) — HTTP methods, status codes, and headers; [restfulapi.net](https://restfulapi.net) for REST concepts and conventions |
+| **node-postgres (pg)** | [node-postgres docs](https://node-postgres.com/) — connecting, querying, and pooling with PostgreSQL from Node.js |
+| **PostgreSQL** | [PostgreSQL docs](https://www.postgresql.org/docs/current/) — SQL reference, data types, and query syntax |
+| **JavaScript** | [MDN JavaScript guide](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide) — language fundamentals; [javascript.info](https://javascript.info) for a more structured walkthrough |
+
+Familiarity with **async/await**, **ES modules** (`import`/`export`), and basic Node.js is assumed throughout this guide.
+
+---
+
 ## Install
 
 ```bash
