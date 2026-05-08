@@ -19,6 +19,7 @@
 - [Layer 4: Chat](#layer-4-chat)
 - [Layer 5: Judge (AI quality scoring)](#layer-5-judge-ai-quality-scoring)
 - [Layer 6: Signup with email verification](#layer-6-signup-with-email-verification)
+- [Screenshots and video in reports](#screenshots-and-video-in-reports)
 - [How to add a new feature area](#how-to-add-a-new-feature-area)
 - [Running tests](#running-tests)
 
@@ -1398,6 +1399,86 @@ npx cucumber-js --profile db e2e/features/db/auth/signup.feature
 
 ---
 
+## Screenshots and video in reports
+
+On failure, Playwright can capture a screenshot and a video of the browser session and embed them directly in the HTML report on the failing step.
+
+### Update e2e/support/hooks.js
+
+Three changes from the basic UI hooks:
+
+1. Import `AfterStep` and `fs`
+2. Pass `recordVideo` when creating the context so Playwright records the session
+3. Add an `AfterStep` hook that fires after the failing step, attaches the screenshot, closes the context to finalise the video, then attaches the video
+
+```js
+import { Before, After, AfterStep, setDefaultTimeout } from '@cucumber/cucumber'
+import { chromium } from '@playwright/test'
+import fs from 'fs'
+
+setDefaultTimeout(20000)
+
+Before({ tags: '@ui' }, async function () {
+  this.browser = await chromium.launch()
+  this.context = await this.browser.newContext({
+    recordVideo: { dir: 'reports/videos/' }
+  })
+  this.page = await this.context.newPage()
+})
+
+AfterStep({ tags: '@ui' }, async function ({ result }) {
+  if (result?.status === 'FAILED') {
+    const screenshot = await this.page?.screenshot()
+    if (screenshot) await this.attach(screenshot, { mediaType: 'image/png', fileName: 'screenshot.png' })
+
+    const video = this.page?.video()
+    await this.page?.close()
+    await this.context?.close()   // finalises the video file
+    this._uiTornDown = true
+
+    if (video) {
+      const videoPath = await video.path()
+      if (videoPath) {
+        await this.attach(fs.readFileSync(videoPath), { mediaType: 'video/webm', fileName: 'video.webm' })
+        fs.unlinkSync(videoPath)
+      }
+    }
+  }
+})
+
+After({ tags: '@ui' }, async function () {
+  if (this._uiTornDown) {
+    await this.browser?.close()
+    return
+  }
+
+  const video = this.page?.video()
+  await this.page?.close()
+  await this.context?.close()
+
+  if (video) {
+    const videoPath = await video.path()
+    if (videoPath) fs.unlinkSync(videoPath)
+  }
+
+  await this.browser?.close()
+})
+```
+
+**Why `AfterStep` and not `After`**: The `After` hook always passes — Cucumber renders it as a collapsed green row in the report. Attachments inside it are hidden. `AfterStep` fires immediately after the failing step, so both files appear directly on that step where the failure is already visible.
+
+**Why close the context inside `AfterStep`**: Playwright doesn't write the video file to disk until the context is closed. The `_uiTornDown` flag tells the `After` hook that cleanup is already done.
+
+### Update .gitignore
+
+```
+reports/videos/
+```
+
+Recordings for passing scenarios are deleted automatically. The directory itself persists between runs, so it should be ignored.
+
+---
+
 ## How to add a new feature area
 
 This is the repeatable pattern for adding a new domain (e.g. "settings", "notifications") to the existing project.
@@ -1499,3 +1580,8 @@ npm run seed          # via Doppler
 ```
 
 Reports are written to `reports/` as HTML after each run.
+
+# TODO
+- explain how github actions work and how to make one
+- explain reports
+- add final thoughts, eg: "this is a base that can be extrapolated into any framework + language"
