@@ -27,6 +27,12 @@ jobs:
           repository: danielcawen/app-for-e2e
           path: app
 
+      - name: Fetch secrets (CI config)
+        uses: dopplerhq/secrets-fetch-action@v1.1.3
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
+          inject-env-vars: true
+
       - name: Start app
         working-directory: app
         env:
@@ -39,12 +45,6 @@ jobs:
         run: |
           for i in $(seq 1 30); do curl -sf http://localhost:3001/health && break; sleep 3; done
           for i in $(seq 1 30); do curl -sf http://localhost:5173 && break; sleep 3; done
-
-      - name: Fetch secrets (CI config)
-        uses: dopplerhq/secrets-fetch-action@v1.1.3
-        with:
-          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
-          inject-env-vars: true
 
       - name: Run API tests
         run: npx cucumber-js --profile api
@@ -69,6 +69,12 @@ jobs:
           repository: danielcawen/app-for-e2e
           path: app
 
+      - name: Fetch secrets (CI config)
+        uses: dopplerhq/secrets-fetch-action@v1.1.3
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
+          inject-env-vars: true
+
       - name: Start app
         working-directory: app
         env:
@@ -81,12 +87,6 @@ jobs:
         run: |
           for i in $(seq 1 30); do curl -sf http://localhost:3001/health && break; sleep 3; done
           for i in $(seq 1 30); do curl -sf http://localhost:5173 && break; sleep 3; done
-
-      - name: Fetch secrets (CI config)
-        uses: dopplerhq/secrets-fetch-action@v1.1.3
-        with:
-          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
-          inject-env-vars: true
 
       - name: Run DB tests
         run: npx cucumber-js --profile db
@@ -114,6 +114,12 @@ jobs:
           repository: danielcawen/app-for-e2e
           path: app
 
+      - name: Fetch secrets (CI config)
+        uses: dopplerhq/secrets-fetch-action@v1.1.3
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
+          inject-env-vars: true
+
       - name: Start app
         working-directory: app
         env:
@@ -126,12 +132,6 @@ jobs:
         run: |
           for i in $(seq 1 30); do curl -sf http://localhost:3001/health && break; sleep 3; done
           for i in $(seq 1 30); do curl -sf http://localhost:5173 && break; sleep 3; done
-
-      - name: Fetch secrets (CI config)
-        uses: dopplerhq/secrets-fetch-action@v1.1.3
-        with:
-          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
-          inject-env-vars: true
 
       - name: Run UI tests
         run: npx cucumber-js --profile ui
@@ -163,6 +163,12 @@ jobs:
           repository: danielcawen/app-for-e2e
           path: app
 
+      - name: Fetch secrets (CI config)
+        uses: dopplerhq/secrets-fetch-action@v1.1.3
+        with:
+          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
+          inject-env-vars: true
+
       - name: Start app
         working-directory: app
         env:
@@ -175,12 +181,6 @@ jobs:
         run: |
           for i in $(seq 1 30); do curl -sf http://localhost:3001/health && break; sleep 3; done
           for i in $(seq 1 30); do curl -sf http://localhost:5173 && break; sleep 3; done
-
-      - name: Fetch secrets (CI config)
-        uses: dopplerhq/secrets-fetch-action@v1.1.3
-        with:
-          doppler-token: ${{ secrets.DOPPLER_TOKEN_CI }}
-          inject-env-vars: true
 
       - name: Run Judge tests
         run: npx cucumber-js --profile judge

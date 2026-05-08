@@ -1,4 +1,6 @@
 import bcrypt from 'bcryptjs'
+import { fileURLToPath } from 'url'
+import { resolve } from 'path'
 import { createPool } from './client.js'
 
 const PASSWORD = 'Password123!'
@@ -9,21 +11,23 @@ const USERS = [
   { email: 'api-signup-existing@example.com', firstName: 'Existing', lastName: 'User' },
 ]
 
-const pool = createPool()
-const passwordHash = await bcrypt.hash(PASSWORD, 10)
-
-for (const { email, firstName, lastName } of USERS) {
-  const { rows } = await pool.query('SELECT id FROM users WHERE email = $1', [email])
-  if (rows.length === 0) {
+export async function seed(pool) {
+  const passwordHash = await bcrypt.hash(PASSWORD, 10)
+  for (const { email, firstName, lastName } of USERS) {
     await pool.query(
       `INSERT INTO users (email, password_hash, first_name, last_name, is_verified)
-       VALUES ($1, $2, $3, $4, $5)`,
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
       [email, passwordHash, firstName, lastName, true]
     )
-    console.log(`Seeded user: ${email}`)
-  } else {
-    console.log(`User already exists: ${email}`)
   }
 }
 
-await pool.end()
+if (fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  ;(async () => {
+    const pool = createPool()
+    await seed(pool)
+    await pool.end()
+    console.log('Seed complete')
+  })()
+}

@@ -2,7 +2,7 @@
 a brief example for: ui, api, db, ai and email
 
 Run commands:
-  npm run seed          # Seed the database (run once before tests)
+  npm run seed          # Seed the database manually (auto-runs via BeforeAll before each test run)
   npm test              # All layers
   npm run test:ui       # UI only
   npm run test:api      # API only
@@ -68,7 +68,7 @@ e2e/
 │   └── judgeClient.js                   Calls Ollama directly to score AI responses
 ├── db/
 │   ├── client.js                        Shared pg.Pool factory
-│   ├── seed.js                          One-off seed script (npm run seed)
+│   ├── seed.js                          Seed script; auto-runs via BeforeAll, callable manually via npm run seed
 │   ├── usersDb.js                       SQL query helpers for users
 │   └── chatDb.js                        SQL query helpers for conversations/messages
 ├── steps/
@@ -91,6 +91,6 @@ e2e/
     ├── env.js                           BASE_URL, FRONTEND_URL, DB_URL, MAIL_URL,
     │                                    LLM_API_KEY, LLM_BASE_URL, LLM_MODEL,
     │                                    VIEWPORT_WIDTH, VIEWPORT_HEIGHT
-    ├── hooks.js                         Tag-based Before/After per layer
+    ├── hooks.js                         BeforeAll seed + tag-based Before/After per layer
     └── world.js                         CustomWorld (browser/apiContext/db slots)
 ```

@@ -1,10 +1,18 @@
-import { Before, After, AfterStep, setDefaultTimeout } from '@cucumber/cucumber'
+import { BeforeAll, Before, After, AfterStep, setDefaultTimeout } from '@cucumber/cucumber'
 
 setDefaultTimeout(20000)
 import { chromium, request } from '@playwright/test'
 import pg from 'pg'
 import fs from 'fs'
-import { BASE_URL, DB_URL, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from './env.js'
+import { BASE_URL, DB_URL, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, LLM_API_KEY, LLM_BASE_URL } from './env.js'
+import { seed } from '../db/seed.js'
+import { createPool } from '../db/client.js'
+
+BeforeAll(async function () {
+  const pool = createPool()
+  await seed(pool)
+  await pool.end()
+})
 
 Before({ tags: '@ui' }, async function () {
   this.browser = await chromium.launch()
@@ -70,6 +78,13 @@ After({ tags: '@db' }, async function () {
 })
 
 Before({ tags: '@judge' }, async function () {
+  if (!LLM_API_KEY) {
+    try {
+      await fetch(LLM_BASE_URL)
+    } catch {
+      return this.skip()
+    }
+  }
   this.apiContext = await request.newContext({ baseURL: BASE_URL })
 })
 

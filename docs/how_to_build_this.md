@@ -287,7 +287,7 @@ Then('I should be redirected to the chat page', async function () {
 })
 ```
 
-> **Before running:** `testuser@example.com` must exist in the database. The seed script that creates it is introduced in Layer 3 — complete that step first, then come back and run UI tests. To create the user manually in the meantime: `node e2e/db/seed.js` (requires the DB layer packages).
+> **Before running:** The DB layer (Layer 3) must be complete, as `hooks.js` seeds the database automatically via `BeforeAll` before any scenario runs.
 
 Run it:
 
@@ -461,7 +461,7 @@ npm i -D pg bcryptjs
 
 | Package | Why |
 |---------|-----|
-| `pg` | Official PostgreSQL client for Node.js — used both in `hooks.js` (per-scenario pool) and in `seed.js` (one-off script) |
+| `pg` | Official PostgreSQL client for Node.js — used in `hooks.js` (per-scenario pool and BeforeAll seed) and in `seed.js` (standalone script) |
 | `bcryptjs` | Hashes passwords using the bcrypt algorithm. The seed script uses it to create a test user with a properly hashed password, matching what the real app would store |
 
 ### Folder additions
@@ -628,42 +628,77 @@ Then('the password should be hashed', async function () {
 
 ### e2e/db/seed.js
 
-Creates the test user if it doesn't exist. Run once before the first test run.
+Upserts all test users before each test run. Called automatically by the `BeforeAll` hook in `hooks.js` — no manual step needed.
 
-The seed is **idempotent** — it checks whether the user already exists before inserting, so it's safe to run multiple times without creating duplicates. The password is hashed with bcrypt (cost factor 10) so the stored hash matches exactly what the real app produces during registration. This means UI and API login tests work against a real hash, not a placeholder.
+The seed uses `ON CONFLICT DO UPDATE` so existing users with a stale password hash are corrected on every run. The password is hashed with bcrypt (cost factor 10) so the stored hash matches exactly what the real app produces during registration. This means UI and API login tests work against a real hash, not a placeholder.
+
+`seed(pool)` is exported so `hooks.js` can call it directly. The standalone script entry point is guarded with an `import.meta.url` check so the pool setup only runs when the file is executed directly.
 
 ```js
 import bcrypt from 'bcryptjs'
+import { fileURLToPath } from 'url'
+import { resolve } from 'path'
 import { createPool } from './client.js'
 
-const EMAIL    = 'testuser@example.com'
 const PASSWORD = 'Password123!'
+const USERS = [
+  { email: 'testuser@example.com', firstName: 'Test', lastName: 'User' },
+  { email: 'api-testuser@example.com', firstName: 'Api', lastName: 'User' },
+  { email: 'ui-testuser@example.com', firstName: 'Ui', lastName: 'User' },
+  { email: 'api-signup-existing@example.com', firstName: 'Existing', lastName: 'User' },
+]
 
-const pool = createPool()
-
-const { rows } = await pool.query('SELECT id FROM users WHERE email = $1', [EMAIL])
-
-if (rows.length === 0) {
+export async function seed(pool) {
   const passwordHash = await bcrypt.hash(PASSWORD, 10)
-  await pool.query(
-    `INSERT INTO users (email, password_hash, first_name, last_name, is_verified)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [EMAIL, passwordHash, 'Test', 'User', true]
-  )
-  console.log(`Seeded user: ${EMAIL}`)
-} else {
-  console.log(`User already exists: ${EMAIL}`)
+  for (const { email, firstName, lastName } of USERS) {
+    await pool.query(
+      `INSERT INTO users (email, password_hash, first_name, last_name, is_verified)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash`,
+      [email, passwordHash, firstName, lastName, true]
+    )
+  }
 }
 
-await pool.end()
+if (fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  ;(async () => {
+    const pool = createPool()
+    await seed(pool)
+    await pool.end()
+    console.log('Seed complete')
+  })()
+}
 ```
 
-Seed once, then run DB tests:
+Run DB tests (seed runs automatically via BeforeAll):
+
+```bash
+npx cucumber-js --profile db
+```
+
+To seed manually:
 
 ```bash
 node e2e/db/seed.js
-npx cucumber-js --profile db
 ```
+
+### Update e2e/support/hooks.js
+
+Add `BeforeAll` to seed the database automatically before any scenario runs:
+
+```js
+import { BeforeAll, Before, After, setDefaultTimeout } from '@cucumber/cucumber'
+import { seed } from '../db/seed.js'
+import { createPool } from '../db/client.js'
+
+BeforeAll(async function () {
+  const pool = createPool()
+  await seed(pool)
+  await pool.end()
+})
+```
+
+> `BeforeAll` runs once per test run, before any `Before` hooks fire. Placing it here means every profile (ui, api, db) gets fresh seed data without any manual step.
 
 ---
 
@@ -1728,8 +1763,6 @@ jobs:
 
       - run: npx playwright install --with-deps chromium
 
-      - run: node e2e/db/seed.js
-
       - run: npx cucumber-js --profile api
 
       - run: npx cucumber-js --profile db
@@ -1776,7 +1809,7 @@ npx cucumber-js e2e/features/api/auth/login.feature
 # single scenario by name:
 npx cucumber-js --name "Successful login"
 
-# seed the database first:
+# seed runs automatically via BeforeAll — to seed manually:
 node e2e/db/seed.js   # direct
 npm run seed          # via Doppler
 ```
