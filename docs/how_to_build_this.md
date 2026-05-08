@@ -59,6 +59,8 @@ npx playwright install
 
 `npx playwright install` downloads the Chromium browser binary that Playwright drives.
 
+**Node.js 18 or later is required.** The seed script uses top-level `await`, which needs at minimum Node 14.8; Node 18 LTS is recommended.
+
 > `pg` and `bcryptjs` are added in Layer 3 when the DB layer is introduced.
 
 **Important:** add `"type": "module"` to `package.json`. This tells Node to treat every `.js` file as an ES module, which lets you use `import`/`export` syntax throughout. Without it, you'd need `.mjs` extensions or `require()` calls everywhere.
@@ -227,6 +229,8 @@ After({ tags: '@ui' }, async function () {
 
 ## Layer 1: UI
 
+> **Prerequisite for all layers:** The `app-for-e2e` backend must be running at `BASE_URL` (default: `http://localhost:3001`) and the frontend at `FRONTEND_URL` (default: `http://localhost:5173`) before running any tests. Start those servers before running any `npx cucumber-js` command.
+
 ### e2e/features/ui/auth/login.feature
 
 ```gherkin
@@ -348,7 +352,7 @@ Add the `api` profile. Also add `shared` steps to `ui` now that the shared folde
 }
 ```
 
-> `parallel: 2` for the API profile — API scenarios are stateless HTTP calls, so two workers can run simultaneously without interfering. UI scenarios are serial (`parallel: 0`) because each one launches a real browser, and DB scenarios are serial to avoid concurrent transactions hitting the same rows.
+> `parallel: 2` for the API profile — API scenarios are stateless HTTP calls, so two workers can run simultaneously without interfering. UI scenarios are serial (`parallel: 0`) because each one launches a real browser, and DB scenarios are serial to avoid concurrent transactions hitting the same rows. The `default` profile also has `parallel: 0`, so `npm run test` (all layers) runs everything serially; use individual profiles to get parallel API execution.
 
 ### Update e2e/support/world.js
 
@@ -869,6 +873,19 @@ Then('the response body should contain a conversation ID', async function () {
 })
 ```
 
+### Update e2e/steps/db/userSteps.js
+
+The DB chat feature uses `"a user exists with email"` — a more natural phrasing for the Background step, but the same setup logic as `"a user has registered with email"`. Add this alias:
+
+```js
+Given('a user exists with email {string}', async function (email) {
+  const db = usersDb(this.db)
+  await db.deleteByEmail(email)
+  await db.create(email)
+  this.testEmail = email
+})
+```
+
 ### e2e/steps/db/chatSteps.js
 
 ```js
@@ -1186,9 +1203,17 @@ e2e/
     └── ui/signupSteps.js           ← new
 ```
 
+### Update e2e/support/env.js
+
+Add:
+
+```js
+export const MAIL_URL = process.env.MAIL_URL
+```
+
 ### Update config/.env.local
 
-`MAIL_URL` was already in `env.js` defaults — add it explicitly if overriding:
+Add:
 
 ```
 MAIL_URL=http://localhost:8025
@@ -1297,6 +1322,14 @@ Feature: Signup via UI
     Given I am on the login page
     When I sign up via UI with a unique email, first name "Test", last name "User", and password "Password123!"
     Then I should see a signup confirmation message
+
+  Scenario: Verification email contains a working link
+    Given I am on the login page
+    When I sign up via UI with a unique email, first name "Test", last name "User", and password "Password123!"
+    Then I should see a signup confirmation message
+    And I receive a verification email
+    When I click the verification link from the email
+    Then I should be redirected to the chat page
 ```
 
 ### e2e/pages/signupPage.js
@@ -1335,11 +1368,13 @@ export async function verifyConfirmationMessage(page) {
 
 ### e2e/steps/ui/signupSteps.js
 
-The email verification step creates its own `request` context pointed at `MAIL_URL`, polls up to 10 times (1 s apart) for the message, decodes the body, and stores the extracted link on `this.verificationLink` for the next step.
+The `I receive a verification email` step creates its own `request` context pointed at `MAIL_URL`, polls MailHog up to 10 times (1 s apart) for the message addressed to `this.signupEmail`, decodes the quoted-printable body, and extracts the verification URL into `this.verificationLink` for the next step.
 
 ```js
 import { When, Then } from '@cucumber/cucumber'
+import { request } from '@playwright/test'
 import { signup, verifyConfirmationMessage } from '../../pages/signupPage.js'
+import { MAIL_URL } from '../../support/env.js'
 
 When('I sign up via UI with a unique email, first name {string}, last name {string}, and password {string}', async function (firstName, lastName, password) {
   this.signupEmail = `testuser+${Date.now()}@example.com`
@@ -1348,6 +1383,35 @@ When('I sign up via UI with a unique email, first name {string}, last name {stri
 
 Then('I should see a signup confirmation message', async function () {
   await verifyConfirmationMessage(this.page)
+})
+
+Then('I receive a verification email', async function () {
+  const mailContext = await request.newContext({ baseURL: MAIL_URL })
+  let emailBody
+
+  for (let i = 0; i < 10; i++) {
+    const res = await mailContext.get('/api/v1/messages')
+    const messages = await res.json()
+    const match = (Array.isArray(messages) ? messages : []).find(m =>
+      m.To?.some(t => `${t.Mailbox}@${t.Domain}` === this.signupEmail)
+    )
+    if (match) { emailBody = match.Content?.Body; break }
+    await new Promise(r => setTimeout(r, 1000))
+  }
+
+  await mailContext.dispose()
+  if (!emailBody) throw new Error(`No verification email received for ${this.signupEmail}`)
+  const decoded = emailBody
+    .replace(/=\r\n/g, '')
+    .replace(/=\n/g, '')
+    .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  const urlMatch = decoded.match(/https?:\/\/[^\s"'<>]+\/auth\/verify\?token=[^\s"'<>]+/)
+  if (!urlMatch) throw new Error('Verification link not found in email body')
+  this.verificationLink = urlMatch[0]
+})
+
+When('I click the verification link from the email', async function () {
+  await this.page.goto(this.verificationLink)
 })
 ```
 
