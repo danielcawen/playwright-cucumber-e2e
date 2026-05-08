@@ -3,6 +3,7 @@ node_modules
 config/.env.*
 !config/.env.example
 reports/*
-.DS_store
+.DS_Store
+Thumbs.db
 .claude/settings.local.json
 .playwright-mcp/
