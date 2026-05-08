@@ -4,12 +4,13 @@ setDefaultTimeout(20000)
 import { chromium, request } from '@playwright/test'
 import pg from 'pg'
 import fs from 'fs'
-import { BASE_URL, DB_URL } from './env.js'
+import { BASE_URL, DB_URL, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from './env.js'
 
 Before({ tags: '@ui' }, async function () {
   this.browser = await chromium.launch()
   this.context = await this.browser.newContext({
-    recordVideo: { dir: 'reports/videos/' }
+    recordVideo: { dir: 'reports/videos/' },
+    viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT }
   })
   this.page = await this.context.newPage()
 })

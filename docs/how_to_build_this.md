@@ -20,6 +20,7 @@
 - [Layer 5: Judge (AI quality scoring)](#layer-5-judge-ai-quality-scoring)
 - [Layer 6: Signup with email verification](#layer-6-signup-with-email-verification)
 - [Screenshots and video in reports](#screenshots-and-video-in-reports)
+- [Viewport / window size](#viewport--window-size)
 - [How to add a new feature area](#how-to-add-a-new-feature-area)
 - [CI/CD with GitHub Actions](#cicd-with-github-actions)
 - [Running tests](#running-tests)
@@ -1478,6 +1479,53 @@ reports/videos/
 ```
 
 Recordings for passing scenarios are deleted automatically. The directory itself persists between runs, so it should be ignored.
+
+---
+
+## Viewport / window size
+
+By default the browser opens at 1280×720. Pass `VIEWPORT_WIDTH` and `VIEWPORT_HEIGHT` as environment variables to run UI tests at any size without changing any code.
+
+### Update e2e/support/env.js
+
+Add at the bottom:
+
+```js
+export const VIEWPORT_WIDTH = process.env.VIEWPORT_WIDTH ? parseInt(process.env.VIEWPORT_WIDTH) : 1280
+export const VIEWPORT_HEIGHT = process.env.VIEWPORT_HEIGHT ? parseInt(process.env.VIEWPORT_HEIGHT) : 720
+```
+
+### Update e2e/support/hooks.js
+
+Import the two new exports and pass `viewport` to `newContext`:
+
+```js
+import { BASE_URL, DB_URL, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from './env.js'
+
+Before({ tags: '@ui' }, async function () {
+  this.browser = await chromium.launch()
+  this.context = await this.browser.newContext({
+    recordVideo: { dir: 'reports/videos/' },
+    viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT }
+  })
+  this.page = await this.context.newPage()
+})
+```
+
+### Usage
+
+```bash
+# desktop — default, no variables needed
+npx cucumber-js --profile ui
+
+# iPhone 14 Pro
+VIEWPORT_WIDTH=393 VIEWPORT_HEIGHT=852 npx cucumber-js --profile ui
+
+# Samsung Galaxy S21
+VIEWPORT_WIDTH=360 VIEWPORT_HEIGHT=800 npx cucumber-js --profile ui
+```
+
+The defaults match Playwright's own default, so existing runs are unaffected. Values are parsed as integers, so passing them as strings from the shell works correctly.
 
 ---
 

@@ -10,3 +10,5 @@ export const MAIL_URL = process.env.MAIL_URL
 export const LLM_API_KEY = process.env.LLM_API_KEY
 export const LLM_BASE_URL = process.env.LLM_BASE_URL
 export const LLM_MODEL = process.env.LLM_MODEL
+export const VIEWPORT_WIDTH = process.env.VIEWPORT_WIDTH ? parseInt(process.env.VIEWPORT_WIDTH) : 1280
+export const VIEWPORT_HEIGHT = process.env.VIEWPORT_HEIGHT ? parseInt(process.env.VIEWPORT_HEIGHT) : 720
