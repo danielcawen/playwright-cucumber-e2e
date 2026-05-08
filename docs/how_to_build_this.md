@@ -2,6 +2,7 @@
 
 ## Index
 
+- [About the app](#about-the-app)
 - [Required knowledge and documentation](#required-knowledge-and-documentation)
 - [Install](#install)
 - [Folder structure](#folder-structure)
@@ -25,6 +26,12 @@
 - [CI/CD with GitHub Actions](#cicd-with-github-actions)
 - [Running tests](#running-tests)
 - [Final thoughts](#final-thoughts)
+
+---
+
+## About the app
+
+The tests in this project run against **[app-for-e2e](https://github.com/danielcawen/app-for-e2e)** — a full-stack practice app built specifically for this example. To run the tests locally, follow the setup steps in that repository's README to get the app running before executing any test commands.
 
 ---
 
