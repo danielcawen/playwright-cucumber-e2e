@@ -21,7 +21,9 @@
 - [Layer 6: Signup with email verification](#layer-6-signup-with-email-verification)
 - [Screenshots and video in reports](#screenshots-and-video-in-reports)
 - [How to add a new feature area](#how-to-add-a-new-feature-area)
+- [CI/CD with GitHub Actions](#cicd-with-github-actions)
 - [Running tests](#running-tests)
+- [Final thoughts](#final-thoughts)
 
 ---
 
@@ -1555,6 +1557,94 @@ export const settingsDb = (pool) => ({
 
 ---
 
+## CI/CD with GitHub Actions
+
+GitHub Actions runs your tests automatically on every push or pull request. The workflow file lives at `.github/workflows/e2e-tests.yml`.
+
+### What this workflow does
+
+1. Spins up a PostgreSQL service (for DB tests)
+2. Installs Node and Playwright
+3. Seeds the database
+4. Runs all three test profiles in sequence
+5. Uploads the `reports/` folder as an artifact if any tests fail
+
+### .github/workflows/e2e-tests.yml
+
+```yaml
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: e2e_practice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      BASE_URL: ${{ secrets.BASE_URL }}
+      FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+      DB_URL: postgresql://postgres:postgres@localhost:5432/e2e_practice
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: node e2e/db/seed.js
+
+      - run: npx cucumber-js --profile api
+
+      - run: npx cucumber-js --profile db
+
+      - run: npx cucumber-js --profile ui
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: reports
+          path: reports/
+```
+
+### Key pieces
+
+| Piece | Why |
+|-------|-----|
+| `services.postgres` | Runs a real Postgres container so DB tests have a database to connect to |
+| `BASE_URL` / `FRONTEND_URL` secrets | Point at your deployed app — set these under **Settings → Secrets → Actions** in GitHub |
+| `DB_URL` | Hardcoded to the local service container; no secret needed |
+| `npx playwright install --with-deps chromium` | Downloads Chromium and its OS-level dependencies on the runner |
+| `upload-artifact` | Saves HTML reports so you can inspect failures without re-running locally |
+
+> `BASE_URL` and `FRONTEND_URL` must point at a live backend and frontend. If you don't have a deployed environment yet, skip the `ui` step and only run `api` and `db` until the app is deployed somewhere CI can reach.
+
+---
+
 ## Running tests
 
 ```bash
@@ -1581,7 +1671,15 @@ npm run seed          # via Doppler
 
 Reports are written to `reports/` as HTML after each run.
 
-# TODO
-- explain how github actions work and how to make one
-- explain reports
-- add final thoughts, eg: "this is a base that can be extrapolated into any framework + language"
+---
+
+## Final thoughts
+
+This project is a base, not a blueprint locked to one stack. The patterns here — Cucumber BDD, a world object for shared state, tag-driven hooks, and thin wrappers per layer — transfer directly to any language or framework. The three-layer model (UI, API, DB) works whether the frontend is React, Vue, or a mobile app, and whether the backend is Node, Python, or Go.
+
+A few principles worth carrying forward:
+
+- **Test at the right layer.** Use the DB layer to verify data integrity, the API layer for business logic and contracts, and the UI layer only for what genuinely requires a browser. Avoid duplicating the same assertion across all three layers — pick the one where the failure signal is clearest.
+- **Keep infrastructure in hooks, not steps.** Steps should describe behaviour, not manage connections. The `Before`/`After` pattern in `hooks.js` means every new feature area gets setup and teardown for free.
+- **Seed data is part of the test suite.** A test that depends on manually created data is fragile. Treat `seed.js` and the `usersDb` helpers as first-class code.
+- **CI is the source of truth.** A test that only passes locally isn't a passing test. The GitHub Actions workflow is the canonical run; everything else is development convenience.
