@@ -15,7 +15,7 @@ Feature: AI chat response quality
       | prompt                            |
       | Hello, how are you?               |
       | What is the capital of France?    |
-      | Can you help me write a function? |
+      | Write a JavaScript function that adds two numbers |
 
   Scenario: AI response to gibberish is always safe
     When I send "asdfghjkl zxcvbnm qwerty" and evaluate the response quality
