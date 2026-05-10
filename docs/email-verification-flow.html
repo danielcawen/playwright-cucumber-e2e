@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Verification Flow</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+
+  .diagram {
+    width: 980px;
+    max-width: 100%;
+    position: relative;
+  }
+
+  /* Color key */
+  .color-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin-bottom: 20px;
+    font-size: 11.5px;
+    color: #8b949e;
+    align-items: center;
+  }
+
+  .color-key-label { margin-right: 4px; }
+  .key-row { display: flex; align-items: center; gap: 6px; }
+
+  .key-badge {
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .badge-test { background: #f85149; color: #fff; }
+  .badge-ui   { background: #388bfd; color: #fff; }
+  .badge-api  { background: #39d0d8; color: #000; }
+  .badge-db   { background: #e3b341; color: #000; }
+  .badge-mail { background: #3fb950; color: #000; }
+
+  /* Flow wrapper — position:relative so SVG overlay can sit on top */
+  .flow-wrap {
+    position: relative;
+  }
+
+  .flow-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .row-gap { height: 48px; }
+
+  /* Step box */
+  .step {
+    flex: 1 1 0;
+    border: 2px solid #30363d;
+    border-radius: 6px;
+    background: #161b22;
+    padding: 12px 13px;
+    font-size: 12px;
+    line-height: 1.8;
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .step-num {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 5px;
+  }
+
+  .step-ui   { border-color: #388bfd; }
+  .step-ui   .step-num { color: #388bfd; }
+
+  .step-api  { border-color: #39d0d8; }
+  .step-api  .step-num { color: #39d0d8; }
+
+  .step-db   { border-color: #e3b341; }
+  .step-db   .step-num { color: #e3b341; }
+
+  .step-mail { border-color: #3fb950; }
+  .step-mail .step-num { color: #3fb950; }
+
+  .step-test { border-color: #f85149; }
+  .step-test .step-num { color: #f85149; }
+
+  /* Syntax colours */
+  .kw  { color: #e3b341; font-weight: 600; }
+  .fn  { color: #d2a8ff; }
+  .str { color: #a5d6ff; }
+  .val { color: #79c0ff; }
+
+  /* Inline arrow between steps */
+  .arr {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0 8px;
+    color: #6e7681;
+    font-size: 18px;
+    align-self: center;
+  }
+
+  /* SVG overlay drawn by JS */
+  #connector-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 20px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #161b22;
+    padding: 11px 18px;
+    font-size: 12px;
+    color: #6e7681;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .mac-dots { display: flex; gap: 5px; margin-right: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-r { background: #f85149; }
+  .dot-y { background: #e3b341; }
+  .dot-g { background: #3fb950; }
+
+  .footer-prompt { color: #3fb950; }
+
+  .cursor {
+    display: inline-block;
+    width: 9px; height: 14px;
+    background: #c9d1d9;
+    animation: blink 1.1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="diagram">
+
+  <!-- Color key -->
+  <div class="color-key">
+    <span class="color-key-label">System color key:</span>
+    <div class="key-row"><span class="key-badge badge-test">[TEST]</span> Cucumber test runner</div>
+    <div class="key-row"><span class="key-badge badge-ui">[UI]</span> Playwright browser</div>
+    <div class="key-row"><span class="key-badge badge-api">[API]</span> backend HTTP server</div>
+    <div class="key-row"><span class="key-badge badge-db">[DB]</span> PostgreSQL</div>
+    <div class="key-row"><span class="key-badge badge-mail">[MAIL]</span> MailHog</div>
+  </div>
+
+  <div class="flow-wrap" id="flowWrap">
+
+    <svg id="connector-svg"></svg>
+
+    <!-- Row 1 -->
+    <div class="flow-row" id="row1">
+
+      <div class="step step-ui" id="s1">
+        <div class="step-num">[1]</div>
+        signup form submit<br>
+        <span class="fn">page</span>.<span class="fn">click</span>(<span class="str">submitBtn</span>)
+      </div>
+
+      <div class="arr">→</div>
+
+      <div class="step step-api" id="s2">
+        <div class="step-num">[2]</div>
+        <span class="kw">POST</span> /api/auth/signup<br>
+        <span class="val">201 Created</span>
+      </div>
+
+      <div class="arr">→</div>
+
+      <div class="step step-db" id="s3">
+        <div class="step-num">[3]</div>
+        <span class="kw">INSERT INTO</span> users<br>
+        is_verified = <span class="val">false</span><br>
+        magic_token = <span class="str">xxx</span>
+      </div>
+
+      <div class="arr">→</div>
+
+      <div class="step step-mail" id="s4">
+        <div class="step-num">[MAIL]</div>
+        SMTP captured<br>
+        to: <span class="str">user@example.com</span><br>
+        link: <span class="str">/verify?token=xxx</span>
+      </div>
+
+    </div>
+
+    <div class="row-gap"></div>
+
+    <!-- Row 2 -->
+    <div class="flow-row" id="row2">
+
+      <div class="step step-test" id="s5">
+        <div class="step-num">[TEST]</div>
+        poll MailHog<br>
+        <span class="kw">GET</span> /api/v1/messages<br>
+        retry x10, 1s apart
+      </div>
+
+      <div class="arr">→</div>
+
+      <div class="step step-test" id="s6">
+        <div class="step-num">[6]</div>
+        decode body<br>
+        quoted-printable<br>
+        extract verify URL
+      </div>
+
+      <div class="arr">→</div>
+
+      <div class="step step-ui" id="s7">
+        <div class="step-num">[7]</div>
+        <span class="fn">page</span>.<span class="fn">goto</span>(<span class="str">verifyLink</span>)<br>
+        follow verification link
+      </div>
+
+      <div class="arr">→</div>
+
+      <div class="step step-db" id="s8">
+        <div class="step-num">[8]</div>
+        <span class="kw">UPDATE</span> users<br>
+        is_verified = <span class="val">true</span><br>
+        magic_token = <span class="val">null</span>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="mac-dots">
+      <div class="dot dot-r"></div>
+      <div class="dot dot-y"></div>
+      <div class="dot dot-g"></div>
+    </div>
+    <span class="footer-prompt">&gt;</span>
+    <span>// MailHog captures outgoing email locally — no real emails sent during tests</span>
+    <span class="cursor"></span>
+  </div>
+
+</div>
+
+<script>
+  function drawConnector() {
+    const wrap = document.getElementById('flowWrap');
+    const mail = document.getElementById('s4');   // top-right box: [MAIL]
+    const test = document.getElementById('s5');   // bottom-left box: [TEST]
+    const svg  = document.getElementById('connector-svg');
+
+    const W = wrap.getBoundingClientRect();
+    const M = mail.getBoundingClientRect();
+    const T = test.getBoundingClientRect();
+
+    // All coords relative to wrap
+    // Start: right-center of [MAIL]
+    const sx = M.right  - W.left;
+    const sy = M.top    - W.top + M.height / 2;
+
+    // End: left-center of [TEST]
+    const ex = T.left   - W.left;
+    const ey = T.top    - W.top + T.height / 2;
+
+    // Loop path: go right from [MAIL], arc down, travel left below both rows,
+    // arc up-left and arrive at left side of [TEST].
+    const pad = 18;   // how far outside the boxes we go
+    const r   = 12;   // corner radius
+
+    const rx = sx + pad;          // right turn-around x
+    const by = M.bottom - W.top + 24; // below-row y (in the gap)
+    const lx = ex - pad;          // left turn-around x
+
+    const pathD = [
+      `M ${sx} ${sy}`,
+      `L ${rx - r} ${sy}`,
+      `Q ${rx} ${sy} ${rx} ${sy + r}`,
+      `L ${rx} ${by - r}`,
+      `Q ${rx} ${by} ${rx - r} ${by}`,
+      `L ${lx + r} ${by}`,
+      `Q ${lx} ${by} ${lx} ${by - r}`,  // wait — need to go UP from by to ey
+      // Actually ey is above by if test is below, let me recalc
+    ].join(' ');
+
+    // Simpler: recalculate going down into the gap then back up to TEST mid
+    // by is below row1; ey is mid of row2 which is below by... no.
+    // row1 bottom < gap < row2 top. So:
+    // by should be IN the gap, between row1 bottom and row2 top.
+    // sy is row1 mid. ey is row2 mid.
+    // So by is between sy and ey.
+
+    const gapY = M.bottom - W.top + 24; // ~mid of the gap
+
+    const path = `
+      M ${sx},${sy}
+      L ${rx - r},${sy}
+      Q ${rx},${sy} ${rx},${sy + r}
+      L ${rx},${gapY - r}
+      Q ${rx},${gapY} ${rx - r},${gapY}
+      L ${lx + r},${gapY}
+      Q ${lx},${gapY} ${lx},${gapY + r}
+      L ${lx},${ey - r}
+      Q ${lx},${ey} ${lx + r},${ey}
+      L ${ex},${ey}
+    `;
+
+    // Arrowhead pointing right into [TEST] left edge
+    const ahPath = `M ${ex},${ey} L ${ex - 11},${ey - 6} L ${ex - 11},${ey + 6} Z`;
+
+    // Envelope in the middle of the long horizontal segment
+    const envX = (rx + lx) / 2;
+    const envY = gapY;
+
+    svg.innerHTML = `
+      <path d="${path}" fill="none" stroke="#6e7681"
+            stroke-width="1.5" stroke-dasharray="6,4" stroke-linecap="round"/>
+      <path d="${ahPath}" fill="#6e7681"/>
+      <rect x="${envX - 16}" y="${envY - 13}" width="32" height="26"
+            rx="3" fill="#0d1117"/>
+      <text x="${envX}" y="${envY + 8}" text-anchor="middle"
+            font-size="20" fill="#8b949e">✉</text>
+    `;
+  }
+
+  window.addEventListener('load', drawConnector);
+  window.addEventListener('resize', drawConnector);
+  document.fonts.ready.then(drawConnector);
+</script>
+</body>
+</html>

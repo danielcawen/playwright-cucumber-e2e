@@ -2,6 +2,7 @@
 
 ## Index
 
+- [About this project](#about-this-project)
 - [About the app](#about-the-app)
 - [Required knowledge and documentation](#required-knowledge-and-documentation)
 - [Install](#install)
@@ -26,6 +27,16 @@
 - [CI/CD with GitHub Actions](#cicd-with-github-actions)
 - [Running tests](#running-tests)
 - [Final thoughts](#final-thoughts)
+
+---
+
+## About this project
+
+The goal of this project is to have **one place with examples of the most common test cases — approached from multiple angles**.
+
+Each feature is covered across the three test layers (UI, API, and DB) so they complement each other: the UI test confirms what the user sees, the API test validates the contract, and the DB test checks the data directly. Together they give you more confidence than any single layer alone.
+
+This is not meant to be the only way to do things. It is one approach that has been easy to understand, explain to others, and maintain over time.
 
 ---
 

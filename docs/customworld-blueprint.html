@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CustomWorld Blueprint</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d1117;
+    color: #e6edf3;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+
+  .diagram {
+    width: 900px;
+    max-width: 100%;
+  }
+
+  .title {
+    text-align: center;
+    font-size: 18px;
+    color: #c9d1d9;
+    margin-bottom: 20px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Root node */
+  .root-node {
+    border: 2px solid #58a6ff;
+    border-radius: 6px;
+    width: 320px;
+    margin: 0 auto 0;
+    overflow: hidden;
+  }
+
+  .root-node .node-header {
+    background: #1c2128;
+    border-bottom: 1px solid #58a6ff;
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #58a6ff;
+  }
+
+  .root-node .node-header::before {
+    content: '>';
+    color: #58a6ff;
+  }
+
+  .root-node .node-body {
+    background: #0d1117;
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  .kw-this { color: #58a6ff; }
+  .kw-null { color: #ff7b72; }
+  .kw-comment { color: #6e7681; }
+
+  /* Connectors area */
+  .connectors {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    position: relative;
+    height: 60px;
+    margin-top: -2px;
+  }
+
+  .connector-line {
+    position: absolute;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .connector-label {
+    font-size: 11px;
+    color: #6e7681;
+    margin-top: 4px;
+  }
+
+  .arrow-down {
+    width: 2px;
+    height: 30px;
+    background: repeating-linear-gradient(
+      to bottom,
+      #6e7681 0px,
+      #6e7681 4px,
+      transparent 4px,
+      transparent 8px
+    );
+    margin-top: 2px;
+  }
+
+  .arrow-tip {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 7px solid #6e7681;
+  }
+
+  /* Three columns */
+  .columns {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+  }
+
+  /* Category panels */
+  .panel {
+    flex: 1;
+    max-width: 260px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .panel-ui { border: 2px solid #58a6ff; background: rgba(88, 166, 255, 0.04); }
+  .panel-api { border: 2px solid #39d0d8; background: rgba(57, 208, 216, 0.04); }
+  .panel-db { border: 2px solid #d2a8ff; background: rgba(210, 168, 255, 0.04); }
+
+  .panel-tag {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 0 6px;
+    letter-spacing: 0.08em;
+  }
+
+  .panel-ui .panel-tag { color: #58a6ff; }
+  .panel-api .panel-tag { color: #39d0d8; }
+  .panel-db .panel-tag { color: #d2a8ff; }
+
+  .panel-tag span {
+    border: 1px solid currentColor;
+    padding: 2px 8px;
+    border-radius: 3px;
+  }
+
+  /* Step blocks */
+  .block {
+    border: 1.5px solid #f0b429;
+    border-radius: 5px;
+    padding: 10px 12px;
+    background: #161b22;
+    font-size: 12px;
+    line-height: 1.7;
+  }
+
+  .block-header {
+    color: #f0b429;
+    font-weight: 700;
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+
+  .block-header::before { content: '$ '; }
+
+  .block-step { border-color: #3fb950; }
+  .block-step .block-header { color: #3fb950; }
+
+  .block-after { border-color: #f0b429; }
+  .block-after .block-header { color: #f0b429; }
+
+  .block code {
+    display: block;
+    color: #c9d1d9;
+  }
+
+  .fn { color: #d2a8ff; }
+  .str { color: #a5d6ff; }
+  .kw2 { color: #ff7b72; }
+  .prop { color: #e3b341; }
+
+  /* Mini arrows between blocks */
+  .mini-arrow {
+    text-align: center;
+    color: #6e7681;
+    font-size: 14px;
+    line-height: 1;
+    margin: -2px 0;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 20px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #161b22;
+    padding: 12px 20px;
+    font-size: 13px;
+    color: #6e7681;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .footer-prompt {
+    color: #3fb950;
+    margin-right: 4px;
+  }
+
+  .cursor {
+    display: inline-block;
+    width: 9px;
+    height: 15px;
+    background: #c9d1d9;
+    animation: blink 1.1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* SVG connector overlay */
+  .svg-connectors {
+    display: block;
+    width: 100%;
+    overflow: visible;
+    margin-bottom: -4px;
+  }
+</style>
+</head>
+<body>
+<div class="diagram">
+  <div class="title">CustomWorld blueprint</div>
+
+  <!-- Root node -->
+  <div class="root-node">
+    <div class="node-header">CustomWorld.js</div>
+    <div class="node-body">
+      <span class="kw-this">this</span>.browser = <span class="kw-null">null</span><br>
+      <span class="kw-this">this</span>.page = <span class="kw-null">null</span><br>
+      <span class="kw-this">this</span>.apiContext = <span class="kw-null">null</span><br>
+      <span class="kw-this">this</span>.db = <span class="kw-null">null</span><br><br>
+      <span class="kw-comment">// new instance per scenario</span>
+    </div>
+  </div>
+
+  <!-- SVG lines from root to panels -->
+  <svg class="svg-connectors" height="64" viewBox="0 0 900 64" preserveAspectRatio="xMidYMid meet">
+    <!-- left branch -->
+    <line x1="450" y1="0" x2="450" y2="18" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="5,4"/>
+    <line x1="450" y1="18" x2="133" y2="18" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="5,4"/>
+    <line x1="133" y1="18" x2="133" y2="52" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="5,4"/>
+    <polygon points="128,52 138,52 133,60" fill="#6e7681"/>
+    <text x="155" y="15" fill="#6e7681" font-family="JetBrains Mono,monospace" font-size="11">new</text>
+
+    <!-- center branch -->
+    <line x1="450" y1="18" x2="450" y2="52" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="5,4"/>
+    <polygon points="445,52 455,52 450,60" fill="#6e7681"/>
+    <text x="458" y="15" fill="#6e7681" font-family="JetBrains Mono,monospace" font-size="11">new</text>
+
+    <!-- right branch -->
+    <line x1="450" y1="18" x2="767" y2="18" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="5,4"/>
+    <line x1="767" y1="18" x2="767" y2="52" stroke="#6e7681" stroke-width="1.5" stroke-dasharray="5,4"/>
+    <polygon points="762,52 772,52 767,60" fill="#6e7681"/>
+    <text x="721" y="15" fill="#6e7681" font-family="JetBrains Mono,monospace" font-size="11">new</text>
+  </svg>
+
+  <!-- Three panels -->
+  <div class="columns">
+
+    <!-- @ui -->
+    <div class="panel panel-ui">
+      <div class="panel-tag"><span>[ @ui ]</span></div>
+
+      <div class="block">
+        <div class="block-header">Before</div>
+        <code><span class="fn">chromium</span>.<span class="fn">launch</span>()</code>
+        <code><span class="kw-this">this</span>.page = <span class="fn">newPage</span>()</code>
+      </div>
+
+      <div class="mini-arrow">↓</div>
+
+      <div class="block block-step">
+        <div class="block-header">step</div>
+        <code><span class="kw-this">this</span>.page.<span class="fn">goto</span>(<span class="str">url</span>)</code>
+        <code><span class="kw-this">this</span>.page.<span class="fn">click</span>(<span class="str">btn</span>)</code>
+      </div>
+
+      <div class="mini-arrow">↓</div>
+
+      <div class="block block-after">
+        <div class="block-header">After</div>
+        <code><span class="fn">page</span>.<span class="fn">close</span>()</code>
+        <code><span class="fn">browser</span>.<span class="fn">close</span>()</code>
+      </div>
+    </div>
+
+    <!-- @api -->
+    <div class="panel panel-api">
+      <div class="panel-tag"><span>[ @api ]</span></div>
+
+      <div class="block">
+        <div class="block-header">Before</div>
+        <code><span class="fn">request</span>.<span class="fn">newContext</span>()</code>
+        <code><span class="kw-this">this</span>.apiContext = <span class="str">ctx</span></code>
+      </div>
+
+      <div class="mini-arrow">↓</div>
+
+      <div class="block block-step">
+        <div class="block-header">step</div>
+        <code><span class="kw-this">this</span>.apiContext.<span class="fn">post</span>(<span class="str">url</span>)</code>
+        <code><span class="kw-this">this</span>.response = <span class="str">res</span></code>
+      </div>
+
+      <div class="mini-arrow">↓</div>
+
+      <div class="block block-after">
+        <div class="block-header">After</div>
+        <code><span class="fn">apiContext</span>.<span class="fn">dispose</span>()</code>
+      </div>
+    </div>
+
+    <!-- @db -->
+    <div class="panel panel-db">
+      <div class="panel-tag"><span>[ @db ]</span></div>
+
+      <div class="block">
+        <div class="block-header">Before</div>
+        <code><span class="kw2">new</span> <span class="fn">pg</span>.<span class="fn">Pool</span>()</code>
+        <code><span class="kw-this">this</span>.db = <span class="str">pool</span></code>
+      </div>
+
+      <div class="mini-arrow">↓</div>
+
+      <div class="block block-step">
+        <div class="block-header">step</div>
+        <code><span class="kw-this">this</span>.db.<span class="fn">query</span>(<span class="str">sql</span>)</code>
+        <code><span class="kw-this">this</span>.queryResult = <span class="str">rows</span></code>
+      </div>
+
+      <div class="mini-arrow">↓</div>
+
+      <div class="block block-after">
+        <div class="block-header">After</div>
+        <code><span class="fn">db</span>.<span class="fn">end</span>()</code>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer terminal bar -->
+  <div class="footer">
+    <span class="footer-prompt">&gt;</span>
+    <span class="kw-comment">// state does not persist between scenarios — each World instance is discarded after After.</span>
+    <span class="cursor"></span>
+  </div>
+</div>
+</body>
+</html>
