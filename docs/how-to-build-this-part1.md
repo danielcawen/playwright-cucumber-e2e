@@ -259,6 +259,26 @@ Feature: Login via UI
     Then I should be redirected to the chat page
 ```
 
+### e2e/steps/ui/loginSteps.js
+
+```js
+import { Given, When, Then } from '@cucumber/cucumber'
+import { login } from '../../pages/loginPage.js'
+import { FRONTEND_URL } from '../../support/env.js'
+
+Given('I am on the login page', async function () {
+  await this.page.goto(`${FRONTEND_URL}/login`)
+})
+
+When('I log in with email {string} and password {string}', async function (email, password) {
+  await login(this.page, email, password)
+})
+
+Then('I should be redirected to the chat page', async function () {
+  await this.page.waitForURL(`${FRONTEND_URL}/chat`, { timeout: 5000 })
+})
+```
+
 ### e2e/pages/loginPage.js
 
 Locators are module-level constants. Each action is a named async export — no classes.
@@ -281,26 +301,6 @@ export async function login(page, username, password) {
   await submitButton.waitFor()
   await submitButton.click()
 }
-```
-
-### e2e/steps/ui/loginSteps.js
-
-```js
-import { Given, When, Then } from '@cucumber/cucumber'
-import { login } from '../../pages/loginPage.js'
-import { FRONTEND_URL } from '../../support/env.js'
-
-Given('I am on the login page', async function () {
-  await this.page.goto(`${FRONTEND_URL}/login`)
-})
-
-When('I log in with email {string} and password {string}', async function (email, password) {
-  await login(this.page, email, password)
-})
-
-Then('I should be redirected to the chat page', async function () {
-  await this.page.waitForURL(`${FRONTEND_URL}/chat`, { timeout: 5000 })
-})
 ```
 
 > **Before running:** The DB layer (Layer 3) must be complete, as `hooks.js` seeds the database automatically via `BeforeAll` before any scenario runs.
@@ -996,5 +996,15 @@ A few more principles worth carrying forward:
 Part 2 extends this foundation with multi-layer chat tests, AI response quality scoring via a local LLM, and signup with email verification through MailHog — all using the same world, the same hooks, and the same patterns introduced here.
 
 ---
+
+## TL;DR
+
+Most tutorials test a feature once at the UI layer. This guide tests the same login feature three ways: a Playwright browser test that fills out a form, an HTTP test that validates the JWT response, and a PostgreSQL query that confirms the user row exists. All three layers share one world object, one hooks file, and one config — so when something breaks, the failure is isolated. By the end, you have a working Cucumber BDD suite you can extend without a rewrite.
+
+---
+
+## Meta description
+
+Learn to test the same feature three ways — UI (Playwright), API, and DB — using Cucumber BDD, a shared world object, and tag-based hooks.
 
 *Daniel Cawen - SDET. The full project is at https://github.com/danielcawen/playwright-cucumber-e2e.*

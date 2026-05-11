@@ -853,3 +853,15 @@ The full project — both parts, all six layers — is at https://github.com/dan
 ---
 
 *Daniel Cawen - SDET. The full project is at https://github.com/danielcawen/playwright-cucumber-e2e.*
+
+---
+
+## TL;DR
+
+Part 1 built three test layers for a login feature. Part 2 adds three more: a chat feature tested across UI, API, and DB; an AI judge layer that scores LLM responses using a local model; and a signup flow with email verification through MailHog. Every new layer follows the same pattern — a tag, a Before/After pair in hooks.js, a client file, a feature, and a steps file. The infrastructure never changes shape, only grows.
+
+---
+
+## Meta description
+
+Extend a Cucumber BDD suite with three new layers — chat, AI quality scoring via a local LLM, and signup with email verification — using the same world and hooks from Part 1.
