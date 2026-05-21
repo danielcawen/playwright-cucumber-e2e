@@ -10,7 +10,8 @@
     "test:api": "doppler run -- npx cucumber-js --profile api",
     "test:db": "doppler run -- npx cucumber-js --profile db",
     "test:chat": "doppler run -- npx cucumber-js --profile api e2e/features/api/chat/chat.feature",
-    "test:judge": "doppler run -- npx cucumber-js --profile judge"
+    "test:judge": "doppler run -- npx cucumber-js --profile judge",
+    "test:rerun": "doppler run -- npx cucumber-js @rerun.txt --profile rerun"
   },
   "devDependencies": {
     "@cucumber/cucumber": "^12.8.2",

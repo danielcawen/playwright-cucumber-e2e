@@ -3,35 +3,41 @@
     "require": ["e2e/steps/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/**/*.feature"],
     "parallel": 0,
-    "format": ["progress", "html:reports/cucumber-report.html"],
+    "format": ["progress", "html:reports/cucumber-report.html", "rerun:@rerun.txt"],
     "formatOptions": { "snippetInterface": "async-await" }
   },
   "ui": {
     "require": ["e2e/steps/ui/**/*.js", "e2e/steps/shared/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/ui/**/*.feature"],
     "parallel": 0,
-    "format": ["progress", "html:reports/ui-report.html"],
+    "format": ["progress", "html:reports/ui-report.html", "rerun:@rerun.txt"],
     "formatOptions": { "snippetInterface": "async-await" }
   },
   "api": {
     "require": ["e2e/steps/api/**/*.js", "e2e/steps/shared/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/api/**/*.feature"],
     "parallel": 2,
-    "format": ["progress", "html:reports/api-report.html"],
+    "format": ["progress", "html:reports/api-report.html", "rerun:@rerun.txt"],
     "formatOptions": { "snippetInterface": "async-await" }
   },
   "db": {
     "require": ["e2e/steps/db/**/*.js", "e2e/steps/shared/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/db/**/*.feature"],
     "parallel": 0,
-    "format": ["progress", "html:reports/db-report.html"],
+    "format": ["progress", "html:reports/db-report.html", "rerun:@rerun.txt"],
     "formatOptions": { "snippetInterface": "async-await" }
   },
   "judge": {
     "require": ["e2e/steps/api/**/*.js", "e2e/steps/judge/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/judge/**/*.feature"],
     "parallel": 0,
-    "format": ["progress", "html:reports/judge-report.html"],
+    "format": ["progress", "html:reports/judge-report.html", "rerun:@rerun.txt"],
+    "formatOptions": { "snippetInterface": "async-await" }
+  },
+  "rerun": {
+    "require": ["e2e/steps/**/*.js", "e2e/support/**/*.js"],
+    "parallel": 0,
+    "format": ["progress", "html:reports/rerun-report.html"],
     "formatOptions": { "snippetInterface": "async-await" }
   }
 }

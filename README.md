@@ -10,6 +10,14 @@ Run commands:
   npm run test:chat     # Chat API only
   npm run test:judge    # AI response quality (requires Ollama running locally)
 
+Rerunning failed tests:
+  After any test run, failed scenarios are written to `@rerun.txt`. To rerun only those:
+
+    npm run test:rerun
+
+  This works across all profiles — run `test:ui`, `test:api`, `test:db`, or `test:judge`, then
+  run `test:rerun` to retry only the failures. Results are saved to `reports/rerun-report.html`.
+
 Viewport / window size (UI only):
   Pass VIEWPORT_WIDTH and VIEWPORT_HEIGHT to run at any size. Defaults to 1280×720.
 
