@@ -41,6 +41,36 @@ Environments:
   To run against a specific config:
     doppler run --config prd -- npx cucumber-js --profile ui
 
+Dashboard (CI only):
+  After running the combined CI workflow (E2E All Tests), a test results
+  dashboard is automatically generated and deployed to GitHub Pages.
+
+    https://danielcawen.github.io/playwright-cucumber-e2e/
+
+  The dashboard shows:
+    - Pass / fail / skip / flaky counts per layer (API, DB, UI, Judge) and overall
+    - Trend chart of pass rate and duration over recent runs
+    - Sortable, filterable table of every scenario
+    - Failure details with error messages
+    - Flaky scenarios (detected via rerun + historical comparison)
+
+  To trigger a dashboard update:
+    1. Go to GitHub → Actions → E2E All Tests → Run workflow
+    2. Wait for all four test layers + dashboard deploy to finish
+    3. Open the URL above
+
+  One-time setup required (if not already configured):
+    Repository Settings → Pages → Source → GitHub Actions
+
+  Local HTML reports (no dashboard needed):
+    Each test profile writes an HTML report to `reports/<profile>-report.html`.
+    Open any of these in a browser to inspect individual runs.
+
+    Example: open reports/ui-report.html
+
+  For full proposal and implementation details, see:
+    dashboard-proposal/README.md
+
 Folder structure:
 ```
 e2e/
