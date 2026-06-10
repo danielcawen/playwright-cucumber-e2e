@@ -52,13 +52,13 @@ jobs:
       - name: Rerun failed API scenarios
         if: always()
         run: |
+          mkdir -p reports
+          if [ ! -f reports/api-results.json ]; then echo '[]' > reports/api-results.json; fi
           if [ -f @rerun.txt ] && [ -s @rerun.txt ]; then
             npx cucumber-js @rerun.txt --profile rerun
             mv reports/rerun-results.json reports/api-rerun-results.json
           fi
-          if [ ! -f reports/api-rerun-results.json ]; then
-            echo '[]' > reports/api-rerun-results.json
-          fi
+          if [ ! -f reports/api-rerun-results.json ]; then echo '[]' > reports/api-rerun-results.json; fi
 
       - name: Upload API results
         if: always()
@@ -119,13 +119,13 @@ jobs:
       - name: Rerun failed DB scenarios
         if: always()
         run: |
+          mkdir -p reports
+          if [ ! -f reports/db-results.json ]; then echo '[]' > reports/db-results.json; fi
           if [ -f @rerun.txt ] && [ -s @rerun.txt ]; then
             npx cucumber-js @rerun.txt --profile rerun
             mv reports/rerun-results.json reports/db-rerun-results.json
           fi
-          if [ ! -f reports/db-rerun-results.json ]; then
-            echo '[]' > reports/db-rerun-results.json
-          fi
+          if [ ! -f reports/db-rerun-results.json ]; then echo '[]' > reports/db-rerun-results.json; fi
 
       - name: Upload DB results
         if: always()
@@ -189,13 +189,13 @@ jobs:
       - name: Rerun failed UI scenarios
         if: always()
         run: |
+          mkdir -p reports
+          if [ ! -f reports/ui-results.json ]; then echo '[]' > reports/ui-results.json; fi
           if [ -f @rerun.txt ] && [ -s @rerun.txt ]; then
             npx cucumber-js @rerun.txt --profile rerun
             mv reports/rerun-results.json reports/ui-rerun-results.json
           fi
-          if [ ! -f reports/ui-rerun-results.json ]; then
-            echo '[]' > reports/ui-rerun-results.json
-          fi
+          if [ ! -f reports/ui-rerun-results.json ]; then echo '[]' > reports/ui-rerun-results.json; fi
 
       - name: Upload UI results
         if: always()
@@ -256,13 +256,13 @@ jobs:
       - name: Rerun failed Judge scenarios
         if: always()
         run: |
+          mkdir -p reports
+          if [ ! -f reports/judge-results.json ]; then echo '[]' > reports/judge-results.json; fi
           if [ -f @rerun.txt ] && [ -s @rerun.txt ]; then
             npx cucumber-js @rerun.txt --profile rerun
             mv reports/rerun-results.json reports/judge-rerun-results.json
           fi
-          if [ ! -f reports/judge-rerun-results.json ]; then
-            echo '[]' > reports/judge-rerun-results.json
-          fi
+          if [ ! -f reports/judge-rerun-results.json ]; then echo '[]' > reports/judge-rerun-results.json; fi
 
       - name: Upload Judge results
         if: always()
@@ -303,35 +303,43 @@ jobs:
       - run: npm ci
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: api-results
           path: _reports/
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: db-results
           path: _reports/
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: ui-results
           path: _reports/
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: judge-results
           path: _reports/
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: api-rerun-results
           path: _reports/
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: db-rerun-results
           path: _reports/
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: ui-rerun-results
           path: _reports/
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: judge-rerun-results
           path: _reports/
