@@ -3,10 +3,14 @@ name: E2E UI Tests
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test-ui:
     name: UI Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
 
@@ -18,8 +22,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Checkout app
         uses: actions/checkout@v6
@@ -47,6 +63,10 @@ jobs:
 
       - name: Run UI tests
         run: npx cucumber-js --profile ui
+
+      - name: Ensure reports directory
+        if: always()
+        run: mkdir -p reports
 
       - name: Upload reports
         if: always()

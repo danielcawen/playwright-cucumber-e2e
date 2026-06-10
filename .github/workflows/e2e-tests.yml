@@ -3,10 +3,14 @@ name: E2E All Tests
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test-api:
     name: API Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
@@ -45,9 +49,35 @@ jobs:
       - name: Run API tests
         run: npx cucumber-js --profile api
 
+      - name: Rerun failed API scenarios
+        if: always()
+        run: |
+          if [ -f @rerun.txt ] && [ -s @rerun.txt ]; then
+            npx cucumber-js @rerun.txt --profile rerun
+            mv reports/rerun-results.json reports/api-rerun-results.json
+          fi
+          if [ ! -f reports/api-rerun-results.json ]; then
+            echo '[]' > reports/api-rerun-results.json
+          fi
+
+      - name: Upload API results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-results
+          path: reports/api-results.json
+
+      - name: Upload API rerun results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-rerun-results
+          path: reports/api-rerun-results.json
+
   test-db:
     name: DB Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
@@ -86,9 +116,35 @@ jobs:
       - name: Run DB tests
         run: npx cucumber-js --profile db
 
+      - name: Rerun failed DB scenarios
+        if: always()
+        run: |
+          if [ -f @rerun.txt ] && [ -s @rerun.txt ]; then
+            npx cucumber-js @rerun.txt --profile rerun
+            mv reports/rerun-results.json reports/db-rerun-results.json
+          fi
+          if [ ! -f reports/db-rerun-results.json ]; then
+            echo '[]' > reports/db-rerun-results.json
+          fi
+
+      - name: Upload DB results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-results
+          path: reports/db-results.json
+
+      - name: Upload DB rerun results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-rerun-results
+          path: reports/db-rerun-results.json
+
   test-ui:
     name: UI Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
@@ -130,16 +186,35 @@ jobs:
       - name: Run UI tests
         run: npx cucumber-js --profile ui
 
-      - name: Upload reports
+      - name: Rerun failed UI scenarios
+        if: always()
+        run: |
+          if [ -f @rerun.txt ] && [ -s @rerun.txt ]; then
+            npx cucumber-js @rerun.txt --profile rerun
+            mv reports/rerun-results.json reports/ui-rerun-results.json
+          fi
+          if [ ! -f reports/ui-rerun-results.json ]; then
+            echo '[]' > reports/ui-rerun-results.json
+          fi
+
+      - name: Upload UI results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-reports
-          path: reports/
+          name: ui-results
+          path: reports/ui-results.json
+
+      - name: Upload UI rerun results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-rerun-results
+          path: reports/ui-rerun-results.json
 
   test-judge:
     name: Judge Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
@@ -177,3 +252,125 @@ jobs:
 
       - name: Run Judge tests
         run: npx cucumber-js --profile judge
+
+      - name: Rerun failed Judge scenarios
+        if: always()
+        run: |
+          if [ -f @rerun.txt ] && [ -s @rerun.txt ]; then
+            npx cucumber-js @rerun.txt --profile rerun
+            mv reports/rerun-results.json reports/judge-rerun-results.json
+          fi
+          if [ ! -f reports/judge-rerun-results.json ]; then
+            echo '[]' > reports/judge-rerun-results.json
+          fi
+
+      - name: Upload Judge results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: judge-results
+          path: reports/judge-results.json
+
+      - name: Upload Judge rerun results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: judge-rerun-results
+          path: reports/judge-rerun-results.json
+
+  dashboard:
+    name: Generate and Deploy Dashboard
+    needs: [test-api, test-db, test-ui, test-judge]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: api-results
+          path: _reports/
+      - uses: actions/download-artifact@v4
+        with:
+          name: db-results
+          path: _reports/
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-results
+          path: _reports/
+      - uses: actions/download-artifact@v4
+        with:
+          name: judge-results
+          path: _reports/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: api-rerun-results
+          path: _reports/
+      - uses: actions/download-artifact@v4
+        with:
+          name: db-rerun-results
+          path: _reports/
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-rerun-results
+          path: _reports/
+      - uses: actions/download-artifact@v4
+        with:
+          name: judge-rerun-results
+          path: _reports/
+
+      - uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+          path: _history-checkout
+        continue-on-error: true
+
+      - name: Prepare history file
+        run: |
+          mkdir -p _site
+          if [ -f _history-checkout/_history/runs.jsonl ]; then
+            cp _history-checkout/_history/runs.jsonl _site/runs.jsonl
+          fi
+
+      - name: Generate dashboard
+        run: |
+          node dashboard/generate.js \
+            --api _reports/api-results.json \
+            --api-rerun _reports/api-rerun-results.json \
+            --db _reports/db-results.json \
+            --db-rerun _reports/db-rerun-results.json \
+            --ui _reports/ui-results.json \
+            --ui-rerun _reports/ui-rerun-results.json \
+            --judge _reports/judge-results.json \
+            --judge-rerun _reports/judge-rerun-results.json \
+            --history _site/runs.jsonl \
+            --out _site/index.html \
+            --run-id ${{ github.run_id }} \
+            --run-number ${{ github.run_number }} \
+            --branch ${{ github.ref_name }} \
+            --commit ${{ github.sha }}
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
