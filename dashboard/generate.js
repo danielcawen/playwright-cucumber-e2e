@@ -139,7 +139,7 @@ function saveHistory(filePath, history, maxEntries = 50) {
 // ── Rerun-based flaky detection ─────────────────────────────────────
 
 function detectFlakyFromRerun(firstRunScenarios, rerunFilePath) {
-  if (!rerunFilePath || !existsSync(rerunFilePath)) return {}
+  if (!rerunFilePath || !existsSync(rerunFilePath)) return new Set()
 
   const rerunData = parseCucumberJson(rerunFilePath)
   const rerunScenarios = rerunData.scenarios || []
@@ -213,13 +213,16 @@ function buildRun() {
     if (rerunFlakyKeys.has(key) && sc.status === 'failed') {
       sc.status = 'passed'
       sc.flaky = true
+      sc.rerunFlaky = true
       rerunFlakyCount++
       summary.failed--
       summary.passed++
     }
   }
 
-  summary.passRate = summary.total > 0 ? Math.round((summary.passed / summary.total) * 10000) / 100 : 0
+  summary.rerunFlaky = rerunFlakyCount
+  // Pass rate excludes rerun-flaky: they passed only after retry, not on first attempt
+  summary.passRate = summary.total > 0 ? Math.round(((summary.passed - rerunFlakyCount) / summary.total) * 10000) / 100 : 0
 
   // Build scenario key map for history-based flaky detection
   const scenarioStatuses = {}
@@ -247,6 +250,7 @@ function buildRun() {
     layers[key].failed = layerScenarios.filter(s => s.status === 'failed').length
     layers[key].skipped = layerScenarios.filter(s => s.status === 'skipped' || s.status === 'undefined' || s.status === 'pending').length
     layers[key].ambiguous = layerScenarios.filter(s => s.status === 'ambiguous').length
+    layers[key].rerunFlaky = layerScenarios.filter(s => s.rerunFlaky).length
   }
 
   // Build combined flaky scenarios list
@@ -270,7 +274,7 @@ function buildRun() {
     layers: Object.fromEntries(
       Object.entries(layers).map(([k, v]) => [
         k,
-        { total: v.total, passed: v.passed, failed: v.failed, skipped: v.skipped, ambiguous: v.ambiguous, durationMs: Math.round(v.durationMs) }
+        { total: v.total, passed: v.passed, failed: v.failed, skipped: v.skipped, ambiguous: v.ambiguous, rerunFlaky: v.rerunFlaky || 0, durationMs: Math.round(v.durationMs) }
       ])
     ),
     allScenarios,
@@ -300,6 +304,8 @@ function buildRun() {
 function generateHtml(run, history) {
   const { summary, layers, allScenarios, flakyScenarios, runNumber, branch, commit, timestamp, durationMs, runId } = run
 
+  const flakyStatusMap = Object.fromEntries(flakyScenarios.map(f => [f.uri + ':' + f.line, f.statuses]))
+
   const historyForChart = history.filter(r => r.summary?.total > 0)
 
   const chartLabels = JSON.stringify(historyForChart.map(r => {
@@ -310,6 +316,26 @@ function generateHtml(run, history) {
   const chartPassRates = JSON.stringify(historyForChart.map(r => r.summary.passRate))
   const chartTotals = JSON.stringify(historyForChart.map(r => r.summary.total))
   const chartDurations = JSON.stringify(historyForChart.map(r => Math.round(r.durationMs / 1000)))
+  const chartFailed = JSON.stringify(historyForChart.map(r => r.summary?.failed || 0))
+  const chartFlaky = JSON.stringify(historyForChart.map(r => r.summary?.flaky || 0))
+
+  const slowestScenarios = [...allScenarios]
+    .filter(s => s.durationMs > 0)
+    .sort((a, b) => b.durationMs - a.durationMs)
+    .slice(0, 10)
+
+  const featureBreakdown = new Map()
+  for (const sc of allScenarios) {
+    const key = sc.uri.replace('e2e/features/', '')
+    if (!featureBreakdown.has(key)) featureBreakdown.set(key, { total: 0, passed: 0, failed: 0, flaky: 0, skipped: 0 })
+    const f = featureBreakdown.get(key)
+    f.total++
+    if (sc.flaky) f.flaky++
+    else if (sc.status === 'passed') f.passed++
+    else if (sc.status === 'failed') f.failed++
+    else f.skipped++
+  }
+  const featureList = [...featureBreakdown.entries()].sort((a, b) => b[1].failed - a[1].failed || b[1].flaky - a[1].flaky)
 
   const failedScenarios = allScenarios.filter(s => s.status === 'failed')
   const flakyList = flakyScenarios.filter(f => {
@@ -422,6 +448,37 @@ td.status-cell { white-space: nowrap; }
 }
 
 .hidden { display: none; }
+
+.tag { display: inline-block; padding: 1px 6px; border-radius: 3px; background: #1e3a5f; color: #93c5fd; font-size: 0.7rem; margin: 1px; }
+tr[data-status] { cursor: pointer; }
+tr[data-status]:hover td { background: #243044; }
+.detail-row > td { padding: 0 16px 12px 36px; background: #0c1628; border-bottom: 2px solid #334155; }
+.scenario-detail { padding-top: 8px; }
+.detail-section { margin-bottom: 10px; }
+.detail-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.step-line { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.75rem; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-passed { color: #4ade80; }
+.step-failed { color: #f87171; }
+.step-skipped, .step-undefined, .step-pending { color: #60a5fa; }
+.step-error { font-size: 0.7rem; color: #f87171; padding: 4px 8px; background: #1e293b; border-radius: 4px; margin: 2px 0 4px 18px; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow-y: auto; }
+.flaky-reason { padding: 5px 10px; background: #2d1b00; border-left: 3px solid #f59e0b; border-radius: 0 4px 4px 0; font-size: 0.75rem; color: #fde68a; margin-bottom: 8px; }
+.btn {
+  background: #1e293b; border: 1px solid #334155; border-radius: 6px;
+  padding: 6px 12px; color: #e2e8f0; font-size: 0.8125rem; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { background: #334155; border-color: #475569; }
+.progress-bar { height: 6px; border-radius: 3px; background: #0f172a; display: flex; overflow: hidden; margin-top: 4px; }
+.progress-pass { background: #166534; }
+.progress-fail { background: #991b1b; }
+.progress-flaky { background: #854d0e; }
+.progress-skip { background: #1e3a5f; }
+.mini-stat { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 0.7rem; font-weight: 600; min-width: 24px; text-align: center; }
+.mini-pass { background: #166534; color: #86efac; }
+.mini-fail { background: #991b1b; color: #fca5a5; }
+.mini-flaky { background: #854d0e; color: #fde68a; }
+.mini-skip { background: #1e3a5f; color: #93c5fd; }
+.feature-table td:first-child { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.75rem; color: #94a3b8; }
+.dash { color: #334155; }
 </style>
 </head>
 <body>
@@ -443,7 +500,7 @@ td.status-cell { white-space: nowrap; }
   <div class="card card-fail"><div class="card-label">Failed</div><div class="card-value">${summary.failed}</div></div>
   <div class="card card-skip"><div class="card-label">Skipped</div><div class="card-value">${summary.skipped}</div></div>
   <div class="card card-flaky"><div class="card-label">Flaky</div><div class="card-value">${summary.flaky || 0}</div></div>
-  <div class="card card-rate"><div class="card-label">Pass Rate</div><div class="card-value">${summary.passRate}%</div></div>
+  <div class="card card-rate"><div class="card-label">Pass Rate</div><div class="card-value">${summary.passRate}%</div>${(summary.rerunFlaky || 0) > 0 ? `<div class="card-sub">${summary.rerunFlaky} flaky excl.</div>` : ''}</div>
 </div>
 
 <div class="cards cards-layers">
@@ -454,7 +511,7 @@ td.status-cell { white-space: nowrap; }
     return `<div class="card layer-card" style="border-top-color: ${color}">
       <div class="layer-card-header">
         <span class="layer-card-name">${label}</span>
-        <span class="badge badge-${l.failed > 0 ? 'fail' : l.passed > 0 ? 'pass' : 'skip'}">${l.failed > 0 ? 'FAIL' : 'PASS'}</span>
+        <span class="badge badge-${l.failed > 0 ? 'fail' : (l.rerunFlaky || 0) > 0 ? 'flaky' : l.passed > 0 ? 'pass' : 'skip'}">${l.failed > 0 ? 'FAIL' : (l.rerunFlaky || 0) > 0 ? 'FLAKY' : 'PASS'}</span>
       </div>
       <div class="layer-card-stats">
         <div><span>Total</span><span class="num">${l.total}</span></div>
@@ -468,8 +525,13 @@ td.status-cell { white-space: nowrap; }
 </div>
 
 <div class="chart-section">
-  <h2>Trends</h2>
+  <h2>Pass Rate &amp; Duration</h2>
   <canvas id="trendChart"></canvas>
+</div>
+
+<div class="chart-section">
+  <h2>Failures &amp; Flaky Count</h2>
+  <canvas id="issueChart" style="max-height:160px"></canvas>
 </div>
 
 ${failedScenarios.length > 0 ? `<section style="margin-bottom:24px">
@@ -496,6 +558,67 @@ ${flakyList.length > 0 ? `<section style="margin-bottom:24px">
   </div>`).join('\n  ')}
 </section>` : ''}
 
+${slowestScenarios.length > 0 ? `<section style="margin-bottom:24px">
+  <h2>Slowest Scenarios</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Status</th><th>Layer</th><th>Scenario</th><th>Duration</th>
+      </tr></thead>
+      <tbody>
+        ${slowestScenarios.map((sc, i) => {
+          const statusLabel = sc.flaky ? 'FLAKY' : sc.status.toUpperCase()
+          const statusBadge = sc.flaky ? 'badge-flaky' : sc.status === 'passed' ? 'badge-pass' : sc.status === 'failed' ? 'badge-fail' : 'badge-skip'
+          const layerLabel = { api: 'API', db: 'DB', ui: 'UI', judge: 'Judge' }[sc.layer] || sc.layer
+          const durationColor = sc.durationMs > 10000 ? '#f87171' : sc.durationMs > 5000 ? '#facc15' : '#e2e8f0'
+          return `<tr>
+            <td style="color:#64748b;font-size:0.75rem">${i + 1}</td>
+            <td><span class="badge ${statusBadge}">${statusLabel}</span></td>
+            <td>${layerLabel}</td>
+            <td>${escHtml(sc.name)}</td>
+            <td style="white-space:nowrap;font-weight:600;color:${durationColor}">${fmtDuration(sc.durationMs)}</td>
+          </tr>`
+        }).join('\n        ')}
+      </tbody>
+    </table>
+  </div>
+</section>` : ''}
+
+${featureList.length > 0 ? `<section style="margin-bottom:24px">
+  <h2>By Feature File</h2>
+  <div class="table-wrap">
+    <table class="feature-table">
+      <thead><tr>
+        <th>Feature File</th>
+        <th style="text-align:center">Total</th>
+        <th style="text-align:center">Passed</th>
+        <th style="text-align:center">Failed</th>
+        <th style="text-align:center">Flaky</th>
+        <th style="text-align:center">Skipped</th>
+        <th>Breakdown</th>
+      </tr></thead>
+      <tbody>
+        ${featureList.map(([file, f]) => `<tr>
+          <td>${escHtml(file)}</td>
+          <td style="text-align:center;color:#94a3b8">${f.total}</td>
+          <td style="text-align:center">${f.passed > 0 ? `<span class="mini-stat mini-pass">${f.passed}</span>` : '<span class="dash">&mdash;</span>'}</td>
+          <td style="text-align:center">${f.failed > 0 ? `<span class="mini-stat mini-fail">${f.failed}</span>` : '<span class="dash">&mdash;</span>'}</td>
+          <td style="text-align:center">${f.flaky > 0 ? `<span class="mini-stat mini-flaky">${f.flaky}</span>` : '<span class="dash">&mdash;</span>'}</td>
+          <td style="text-align:center">${f.skipped > 0 ? `<span class="mini-stat mini-skip">${f.skipped}</span>` : '<span class="dash">&mdash;</span>'}</td>
+          <td style="min-width:80px">
+            <div class="progress-bar">
+              ${f.passed > 0 ? `<div class="progress-pass" style="flex:${f.passed}"></div>` : ''}
+              ${f.failed > 0 ? `<div class="progress-fail" style="flex:${f.failed}"></div>` : ''}
+              ${f.flaky > 0 ? `<div class="progress-flaky" style="flex:${f.flaky}"></div>` : ''}
+              ${f.skipped > 0 ? `<div class="progress-skip" style="flex:${f.skipped}"></div>` : ''}
+            </div>
+          </td>
+        </tr>`).join('\n        ')}
+      </tbody>
+    </table>
+  </div>
+</section>` : ''}
+
 <section>
   <h2>All Scenarios (${allScenarios.length})</h2>
 
@@ -515,6 +638,8 @@ ${flakyList.length > 0 ? `<section style="margin-bottom:24px">
       <option value="ui">UI</option>
       <option value="judge">Judge</option>
     </select>
+    <button class="btn" onclick="copyReport(event)" title="Copy filtered results as Markdown">Copy report</button>
+    <button class="btn" onclick="copyLink(event)" title="Copy URL with active filters">Share link</button>
   </div>
 
   <div class="table-wrap">
@@ -534,12 +659,38 @@ ${flakyList.length > 0 ? `<section style="margin-bottom:24px">
           const statusLabel = sc.flaky ? 'FLAKY' : sc.status.toUpperCase()
           const statusBadge = sc.flaky ? 'badge-flaky' : sc.status === 'passed' ? 'badge-pass' : sc.status === 'failed' ? 'badge-fail' : 'badge-skip'
           const layerLabel = { api: 'API', db: 'DB', ui: 'UI', judge: 'Judge' }[sc.layer] || sc.layer
-          return `<tr class="${cls}" data-status="${sc.flaky ? 'flaky' : sc.status}" data-layer="${sc.layer}">
+
+          const tagsHtml = sc.tags && sc.tags.length > 0
+            ? `<div class="detail-section"><div class="detail-label">Tags</div><div>${sc.tags.map(t => `<span class="tag">${escHtml(t)}</span>`).join(' ')}</div></div>`
+            : ''
+
+          let flakyReasonHtml = ''
+          if (sc.rerunFlaky) {
+            flakyReasonHtml = `<div class="flaky-reason">Failed on first attempt, passed on rerun — promoted to passed but excluded from pass rate.</div>`
+          } else if (sc.flaky) {
+            const flakyKey = sc.uri + ':' + sc.line
+            const statuses = flakyStatusMap[flakyKey]
+            flakyReasonHtml = `<div class="flaky-reason">Inconsistent across recent runs: ${statuses ? statuses.join(' → ') : 'mixed statuses'}</div>`
+          }
+
+          const stepsHtml = sc.steps && sc.steps.length > 0
+            ? `<div class="detail-section"><div class="detail-label">Steps</div>${sc.steps.map(s => {
+                const icon = s.status === 'passed' ? '✓' : s.status === 'failed' ? '✗' : '○'
+                const stepLine = `<div class="step-line step-${s.status}">${icon} ${escHtml(s.keyword)}${escHtml(s.name)}</div>`
+                const errLine = s.errorMessage ? `<div class="step-error">${escHtml(s.errorMessage)}</div>` : ''
+                return stepLine + errLine
+              }).join('')}</div>`
+            : ''
+
+          return `<tr class="${cls}" data-status="${sc.flaky ? 'flaky' : sc.status}" data-layer="${sc.layer}" onclick="toggleDetail(this)">
             <td class="status-cell"><span class="badge ${statusBadge}">${statusLabel}</span></td>
             <td>${layerLabel}</td>
             <td>${escHtml(sc.name)}</td>
             <td style="font-size:0.75rem;color:#64748b">${sc.uri.replace('e2e/features/', '')}:${sc.line}</td>
             <td style="white-space:nowrap">${fmtDuration(sc.durationMs)}</td>
+          </tr>
+          <tr class="detail-row ${cls}" style="display:none">
+            <td colspan="5"><div class="scenario-detail">${tagsHtml}${flakyReasonHtml}${stepsHtml}</div></td>
           </tr>`
         }).join('\n          ')}
       </tbody>
@@ -612,13 +763,46 @@ new Chart(ctx, {
   }
 })
 
+// ── Failures & flaky trend chart ──
+const issueCtx = document.getElementById('issueChart').getContext('2d')
+new Chart(issueCtx, {
+  type: 'bar',
+  data: {
+    labels: ${chartLabels},
+    datasets: [
+      { label: 'Failed', data: ${chartFailed}, backgroundColor: 'rgba(248,113,113,0.8)', borderColor: '#f87171', borderWidth: 1 },
+      { label: 'Flaky',  data: ${chartFlaky},  backgroundColor: 'rgba(250,204,21,0.8)',  borderColor: '#facc15', borderWidth: 1 }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { labels: { color: '#94a3b8' } } },
+    scales: {
+      x: { stacked: true, ticks: { color: '#64748b', maxRotation: 45 }, grid: { color: '#1e293b' } },
+      y: { stacked: true, min: 0, ticks: { color: '#94a3b8', stepSize: 1, precision: 0 }, grid: { color: '#1e293b' } }
+    }
+  }
+})
+
+// ── Row expand/collapse ──
+function toggleDetail(row) {
+  const detail = row.nextElementSibling
+  if (detail?.classList.contains('detail-row')) {
+    detail.style.display = detail.style.display === 'none' ? '' : 'none'
+  }
+}
+
 // ── Table sorting ──
 let sortCol = -1
 let sortAsc = true
 
 function sortTable(col) {
   const tbody = document.getElementById('scenarioBody')
-  const rows = Array.from(tbody.querySelectorAll('tr'))
+  const mainRows = Array.from(tbody.querySelectorAll('tr[data-status]'))
+  // Capture [mainRow, detailRow] pairs before reordering
+  const rowPairs = mainRows.map(r => [r, r.nextElementSibling?.classList.contains('detail-row') ? r.nextElementSibling : null])
 
   if (sortCol === col) sortAsc = !sortAsc
   else { sortCol = col; sortAsc = true }
@@ -631,15 +815,18 @@ function sortTable(col) {
 
   const statusOrder = { failed: 0, flaky: 1, passed: 2, skipped: 3, ambiguous: 4 }
 
-  rows.sort((a, b) => {
-    let va = a.cells[col]?.textContent?.trim() || ''
-    let vb = b.cells[col]?.textContent?.trim() || ''
+  rowPairs.sort((a, b) => {
+    let va = a[0].cells[col]?.textContent?.trim() || ''
+    let vb = b[0].cells[col]?.textContent?.trim() || ''
     if (col === 0) { va = statusOrder[va.toLowerCase()] ?? 99; vb = statusOrder[vb.toLowerCase()] ?? 99 }
     if (col === 4) { va = parseDuration(va); vb = parseDuration(vb) }
     return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1)
   })
 
-  rows.forEach(r => tbody.appendChild(r))
+  rowPairs.forEach(([r, detail]) => {
+    tbody.appendChild(r)
+    if (detail) tbody.appendChild(detail)
+  })
 
   filterTable()
 }
@@ -656,7 +843,7 @@ function filterTable() {
   const status = document.getElementById('statusFilter').value
   const layer = document.getElementById('layerFilter').value
 
-  document.querySelectorAll('#scenarioBody tr').forEach(row => {
+  document.querySelectorAll('#scenarioBody tr[data-status]').forEach(row => {
     const text = row.textContent.toLowerCase()
     const rowStatus = row.dataset.status
     const rowLayer = row.dataset.layer
@@ -664,13 +851,85 @@ function filterTable() {
     const matchSearch = !search || text.includes(search)
     const matchStatus = !status || rowStatus === status
     const matchLayer = !layer || rowLayer === layer
+    const visible = matchSearch && matchStatus && matchLayer
 
-    row.classList.toggle('hidden', !(matchSearch && matchStatus && matchLayer))
+    row.classList.toggle('hidden', !visible)
+    const detail = row.nextElementSibling
+    if (detail?.classList.contains('detail-row')) {
+      if (!visible) detail.style.display = 'none'
+    }
+  })
+  updateHash()
+}
+
+// ── URL hash sync ──
+function updateHash() {
+  const status = document.getElementById('statusFilter').value
+  const layer = document.getElementById('layerFilter').value
+  const search = document.getElementById('searchInput').value
+  const parts = []
+  if (status) parts.push('status=' + status)
+  if (layer) parts.push('layer=' + layer)
+  if (search) parts.push('q=' + encodeURIComponent(search))
+  window.history.replaceState(null, '', parts.length ? '#' + parts.join('&') : window.location.pathname + window.location.search)
+}
+
+function loadFromHash() {
+  const hash = window.location.hash.slice(1)
+  if (!hash) return
+  const params = Object.fromEntries(hash.split('&').map(p => {
+    const eq = p.indexOf('=')
+    return eq === -1 ? [p, ''] : [p.slice(0, eq), decodeURIComponent(p.slice(eq + 1))]
+  }))
+  if (params.status) document.getElementById('statusFilter').value = params.status
+  if (params.layer) document.getElementById('layerFilter').value = params.layer
+  if (params.q) document.getElementById('searchInput').value = params.q
+}
+
+// ── Copy report as Markdown ──
+function copyReport(e) {
+  const status = document.getElementById('statusFilter').value
+  const layer = document.getElementById('layerFilter').value
+  const search = document.getElementById('searchInput').value
+  const visibleRows = Array.from(document.querySelectorAll('#scenarioBody tr[data-status]:not(.hidden)'))
+
+  const filterDesc = [
+    status ? 'Status: ' + status : '',
+    layer ? 'Layer: ' + layer : '',
+    search ? 'Search: "' + search + '"' : ''
+  ].filter(Boolean).join(' | ') || 'All scenarios'
+
+  const d = RUN_DATA
+  const lines = [
+    '**E2E Dashboard — Run #' + d.runNumber + ' | ' + d.branch + (d.commit ? ' | ' + d.commit.slice(0,7) : '') + ' | ' + d.summary.passRate + '% pass rate**',
+    'Total: ' + d.summary.total + ' | Passed: ' + d.summary.passed + ' | Failed: ' + d.summary.failed + ' | Flaky: ' + (d.summary.flaky || 0) + ' | Skipped: ' + d.summary.skipped,
+    '',
+    '**Filter: ' + filterDesc + ' (' + visibleRows.length + ' scenarios)**',
+    '',
+    '| Status | Layer | Scenario | File | Duration |',
+    '|--------|-------|----------|------|----------|'
+  ]
+  for (const row of visibleRows) {
+    const c = row.cells
+    lines.push('| ' + [c[0]?.textContent?.trim(), c[1]?.textContent?.trim(), c[2]?.textContent?.trim(), c[3]?.textContent?.trim(), c[4]?.textContent?.trim()].join(' | ') + ' |')
+  }
+
+  navigator.clipboard.writeText(lines.join('\\n')).then(() => {
+    const btn = e.currentTarget; const orig = btn.textContent
+    btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = orig }, 1500)
+  })
+}
+
+// ── Copy shareable link ──
+function copyLink(e) {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const btn = e.currentTarget; const orig = btn.textContent
+    btn.textContent = 'Copied!'; setTimeout(() => { btn.textContent = orig }, 1500)
   })
 }
 
 // Initial sort by status (failed first)
-window.addEventListener('DOMContentLoaded', () => sortTable(0))
+window.addEventListener('DOMContentLoaded', () => { loadFromHash(); sortTable(0) })
 </script>
 </body>
 </html>`

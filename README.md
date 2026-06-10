@@ -41,35 +41,68 @@ Environments:
   To run against a specific config:
     doppler run --config prd -- npx cucumber-js --profile ui
 
-Dashboard (CI only):
-  After running the combined CI workflow (E2E All Tests), a test results
-  dashboard is automatically generated and deployed to GitHub Pages.
+Dashboard:
+  The dashboard is a single HTML file that aggregates results across all four
+  test layers (API, DB, UI, Judge) and tracks history across runs.
 
-    https://danielcawen.github.io/playwright-cucumber-e2e/
+  What it shows:
+    - Pass / fail / skip / flaky counts overall and per layer
+    - Pass rate and duration trend charts across recent runs
+    - Failures & flaky count trend (stacked bar chart)
+    - Slowest scenarios (top 10, colour-coded by duration)
+    - Per-feature-file breakdown with inline progress bars
+    - Sortable, filterable table of every scenario with click-to-expand details
+      (step-by-step results, error messages, tags, flaky reason)
+    - Shareable links: filters are encoded in the URL hash
+    - Copy report button: exports the current filtered view as Markdown
 
-  The dashboard shows:
-    - Pass / fail / skip / flaky counts per layer (API, DB, UI, Judge) and overall
-    - Trend chart of pass rate and duration over recent runs
-    - Sortable, filterable table of every scenario
-    - Failure details with error messages
-    - Flaky scenarios (detected via rerun + historical comparison)
+  Generating locally:
+    Run any combination of test profiles first — each one writes a JSON file
+    to reports/. Then point the generator at those files:
 
-  To trigger a dashboard update:
-    1. Go to GitHub → Actions → E2E All Tests → Run workflow
-    2. Wait for all four test layers + dashboard deploy to finish
-    3. Open the URL above
+      node dashboard/generate.js \
+        --api reports/api-results.json \
+        --db reports/db-results.json \
+        --ui reports/ui-results.json \
+        --judge reports/judge-results.json \
+        --out reports/dashboard.html
 
-  One-time setup required (if not already configured):
-    Repository Settings → Pages → Source → GitHub Actions
+    Open reports/dashboard.html in a browser. All flags except --out are
+    optional — omit any layer you didn't run. History is kept in
+    reports/runs.jsonl and accumulates across local runs automatically.
 
-  Local HTML reports (no dashboard needed):
-    Each test profile writes an HTML report to `reports/<profile>-report.html`.
-    Open any of these in a browser to inspect individual runs.
+    To include rerun data for flaky detection, pass the rerun JSON too:
 
-    Example: open reports/ui-report.html
+      node dashboard/generate.js \
+        --api reports/api-results.json \
+        --api-rerun reports/api-rerun-results.json \
+        ... \
+        --out reports/dashboard.html
 
-  For full proposal and implementation details, see:
-    dashboard-proposal/README.md
+    Note: rerun results use a different filename than the default rerun profile.
+    After running npm run test:rerun, copy the file manually if needed:
+      cp reports/rerun-results.json reports/<layer>-rerun-results.json
+
+  GitHub Pages (CI):
+    After the combined CI workflow (E2E All Tests) completes, the dashboard is
+    automatically deployed to:
+
+      https://danielcawen.github.io/playwright-cucumber-e2e/
+
+    To trigger an update:
+      1. Go to GitHub → Actions → E2E All Tests → Run workflow
+      2. Wait for all four test layers + dashboard deploy to finish
+      3. Open the URL above
+
+    One-time setup (if not already configured):
+      Repository Settings → Pages → Source → GitHub Actions
+
+  Per-run HTML reports (no dashboard needed):
+    Each test profile also writes a standalone Cucumber HTML report:
+      reports/api-report.html
+      reports/db-report.html
+      reports/ui-report.html
+      reports/judge-report.html
 
 Folder structure:
 ```

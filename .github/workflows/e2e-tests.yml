@@ -288,6 +288,7 @@ jobs:
       contents: read
       pages: write
       id-token: write
+      actions: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -365,6 +366,16 @@ jobs:
             --run-number ${{ github.run_number }} \
             --branch ${{ github.ref_name }} \
             --commit ${{ github.sha }}
+
+      - name: Delete stale github-pages artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts \
+            --jq '.artifacts[] | select(.name == "github-pages") | .id' | \
+            while read id; do
+              gh api repos/${{ github.repository }}/actions/artifacts/$id -X DELETE
+            done || true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
