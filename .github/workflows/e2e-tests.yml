@@ -353,8 +353,8 @@ jobs:
       - name: Prepare history file
         run: |
           mkdir -p _site
-          if [ -f _history-checkout/_history/runs.jsonl ]; then
-            cp _history-checkout/_history/runs.jsonl _site/runs.jsonl
+          if [ -f _history-checkout/runs.jsonl ]; then
+            cp _history-checkout/runs.jsonl _site/runs.jsonl
           fi
 
       - name: Generate dashboard

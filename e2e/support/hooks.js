@@ -77,6 +77,10 @@ After({ tags: '@db' }, async function () {
   await this.db?.end()
 })
 
+Before({ tags: '@manual' }, async function () {
+  return 'pending'
+})
+
 Before({ tags: '@judge' }, async function () {
   if (!LLM_API_KEY) {
     try {

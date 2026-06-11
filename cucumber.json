@@ -9,6 +9,7 @@
   "ui": {
     "require": ["e2e/steps/ui/**/*.js", "e2e/steps/shared/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/ui/**/*.feature"],
+    "tags": "not @manual",
     "parallel": 0,
     "format": ["progress", "html:reports/ui-report.html", "json:reports/ui-results.json", "rerun:@rerun.txt"],
     "formatOptions": { "snippetInterface": "async-await" }
@@ -16,6 +17,7 @@
   "api": {
     "require": ["e2e/steps/api/**/*.js", "e2e/steps/shared/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/api/**/*.feature"],
+    "tags": "not @manual",
     "parallel": 2,
     "format": ["progress", "html:reports/api-report.html", "json:reports/api-results.json", "rerun:@rerun.txt"],
     "formatOptions": { "snippetInterface": "async-await" }
@@ -23,6 +25,7 @@
   "db": {
     "require": ["e2e/steps/db/**/*.js", "e2e/steps/shared/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/db/**/*.feature"],
+    "tags": "not @manual",
     "parallel": 0,
     "format": ["progress", "html:reports/db-report.html", "json:reports/db-results.json", "rerun:@rerun.txt"],
     "formatOptions": { "snippetInterface": "async-await" }
@@ -30,6 +33,7 @@
   "judge": {
     "require": ["e2e/steps/api/**/*.js", "e2e/steps/judge/**/*.js", "e2e/support/**/*.js"],
     "paths": ["e2e/features/judge/**/*.feature"],
+    "tags": "not @manual",
     "parallel": 0,
     "format": ["progress", "html:reports/judge-report.html", "json:reports/judge-results.json", "rerun:@rerun.txt"],
     "formatOptions": { "snippetInterface": "async-await" }

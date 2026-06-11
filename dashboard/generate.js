@@ -407,7 +407,6 @@ a { color: #60a5fa; }
 .layer-card-stats .num { font-weight: 600; }
 
 .chart-section { background: #1e293b; border-radius: 8px; padding: 16px; border: 1px solid #334155; margin-bottom: 24px; }
-.chart-section canvas { max-height: 300px; }
 
 .controls { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .controls input, .controls select {
@@ -526,13 +525,43 @@ tr[data-status]:hover td { background: #243044; }
 
 <div class="chart-section">
   <h2>Pass Rate &amp; Duration</h2>
-  <canvas id="trendChart"></canvas>
+  <div style="position:relative;height:260px"><canvas id="trendChart"></canvas></div>
 </div>
 
 <div class="chart-section">
   <h2>Failures &amp; Flaky Count</h2>
-  <canvas id="issueChart" style="max-height:160px"></canvas>
+  <div style="position:relative;height:160px"><canvas id="issueChart"></canvas></div>
 </div>
+
+${historyForChart.length > 1 ? `<section style="margin-bottom:24px">
+  <h2>Past Runs (${historyForChart.length})</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Run</th><th>Date</th><th>Branch</th><th>Pass Rate</th><th>Total</th><th>Passed</th><th>Failed</th><th>Flaky</th><th>Duration</th>
+      </tr></thead>
+      <tbody>
+        ${[...historyForChart].reverse().map(r => {
+          const isCurrent = r.runId === runId
+          const rate = r.summary.passRate
+          const rateColor = rate >= 90 ? '#4ade80' : rate >= 70 ? '#facc15' : '#f87171'
+          const d = new Date(r.timestamp)
+          return `<tr style="${isCurrent ? 'background:#1a2f1a' : ''}">
+            <td style="white-space:nowrap;font-weight:600">#${r.runNumber || '?'}${isCurrent ? ' <span style="font-size:0.7rem;color:#4ade80">(current)</span>' : ''}</td>
+            <td style="font-size:0.8rem;color:#94a3b8;white-space:nowrap">${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</td>
+            <td style="font-size:0.8rem;color:#94a3b8">${escHtml(r.branch || '')}</td>
+            <td style="font-weight:600;color:${rateColor}">${rate}%</td>
+            <td style="color:#94a3b8">${r.summary.total}</td>
+            <td style="color:#4ade80">${r.summary.passed}</td>
+            <td style="color:${r.summary.failed > 0 ? '#f87171' : '#64748b'}">${r.summary.failed}</td>
+            <td style="color:${(r.summary.flaky || 0) > 0 ? '#facc15' : '#64748b'}">${r.summary.flaky || 0}</td>
+            <td style="white-space:nowrap;color:#94a3b8">${fmtDuration(r.durationMs)}</td>
+          </tr>`
+        }).join('\n        ')}
+      </tbody>
+    </table>
+  </div>
+</section>` : ''}
 
 ${failedScenarios.length > 0 ? `<section style="margin-bottom:24px">
   <h2>Failures (${failedScenarios.length})</h2>
